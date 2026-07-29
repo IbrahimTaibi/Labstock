@@ -27,8 +27,27 @@ export async function signIn(
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    /* Message volontairement identique pour un e-mail inconnu et un mot de
-       passe erroné : ne pas révéler quels comptes existent. */
+    /* Un identifiant refusé et une panne de configuration produisent tous
+       deux une erreur : les confondre rend le diagnostic impossible en
+       production. Seul le premier cas reste volontairement vague, pour ne
+       pas révéler quels comptes existent. */
+    const rejected =
+      error.code === "invalid_credentials" ||
+      error.code === "email_not_confirmed";
+
+    if (!rejected) {
+      console.error("[auth] échec non lié aux identifiants", {
+        code: error.code,
+        status: error.status,
+        message: error.message,
+      });
+      return {
+        error:
+          "Service d'authentification injoignable. Vérifiez la configuration du serveur.",
+        email,
+      };
+    }
+
     return { error: "Identifiants incorrects.", email };
   }
 

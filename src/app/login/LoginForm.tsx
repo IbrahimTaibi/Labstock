@@ -4,7 +4,7 @@ import { useActionState } from "react";
 import { LogIn, TriangleAlert } from "lucide-react";
 import { signIn, type SignInState } from "./actions";
 
-const INITIAL: SignInState = { error: null };
+const INITIAL: SignInState = { error: null, email: "" };
 
 const CONTROL =
   "w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-2.5 text-[13px] text-[var(--text-primary)] outline-none transition-colors placeholder:text-[var(--text-muted)] focus:border-[var(--series-1)]";
@@ -26,7 +26,9 @@ export function LoginForm({ next }: { next: string }) {
           autoComplete="username"
           required
           autoFocus
-          placeholder="prenom.nom@labstock.tn"
+          /* Rejoué après un échec : l'action réinitialise les champs. */
+          defaultValue={state.email}
+          placeholder="prenom.nom@labstock.com"
           className={CONTROL}
         />
       </label>

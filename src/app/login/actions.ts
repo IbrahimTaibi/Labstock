@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-export type SignInState = { error: string | null };
+/** `email` est renvoyé pour réafficher la saisie : React réinitialise les
+    champs non contrôlés dès que l'action se termine. */
+export type SignInState = { error: string | null; email: string };
 
 export async function signIn(
   _prev: SignInState,
@@ -15,7 +17,10 @@ export async function signIn(
   const next = String(formData.get("next") ?? "/");
 
   if (!email || !password) {
-    return { error: "Renseignez votre adresse e-mail et votre mot de passe." };
+    return {
+      error: "Renseignez votre adresse e-mail et votre mot de passe.",
+      email,
+    };
   }
 
   const supabase = await createClient();
@@ -24,7 +29,7 @@ export async function signIn(
   if (error) {
     /* Message volontairement identique pour un e-mail inconnu et un mot de
        passe erroné : ne pas révéler quels comptes existent. */
-    return { error: "Identifiants incorrects." };
+    return { error: "Identifiants incorrects.", email };
   }
 
   revalidatePath("/", "layout");

@@ -154,3 +154,57 @@ export type LotStats = {
   expiringSoon: number;
   expired: number;
 };
+
+export type IssueMode = "automatic" | "manual";
+
+export type PrescribedAnalysis = {
+  id: number;
+  batch_ref: string;
+  code: string;
+  name: string;
+  section: string;
+  sample_count: number;
+  imported_at: string;
+};
+
+export type PendingConsumable = {
+  product_id: number;
+  product_name: string;
+  reference: string | null;
+  category: string;
+  stock_available: number;
+  raw_quantity: number;
+  required_quantity: number;
+  covered_samples: number;
+  /** null si les analyses concernées n'utilisent pas le même coefficient. */
+  coefficient: number | null;
+  remaining_stock: number;
+  is_available: boolean;
+  lot_id: number | null;
+  lot_number: string | null;
+  expiry_date: string | null;
+  lot_quantity: number | null;
+};
+
+export type CoefficientDetail = {
+  code: string;
+  analysis: string;
+  consumables: string[];
+};
+
+export type IssueHistoryEntry = {
+  id: number;
+  mode: IssueMode;
+  operator: string;
+  issued_at: string;
+  total_references: number;
+  total_quantity: number;
+};
+
+export type IssueWorkspaceData = {
+  analyses: PrescribedAnalysis[];
+  consumables: PendingConsumable[];
+  coefficients: CoefficientDetail[];
+  history: IssueHistoryEntry[];
+  lastSync: string | null;
+};

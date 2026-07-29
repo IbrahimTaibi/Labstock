@@ -47,3 +47,12 @@ export function formatMonthShort(iso: string) {
 export function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("fr-FR");
 }
+
+/** "2026-06-26T10:30:00Z" -> "26/06/2026 10:30" */
+export function formatDateTime(iso: string) {
+  const date = new Date(iso);
+  return `${date.toLocaleDateString("fr-FR")} ${date.toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+}

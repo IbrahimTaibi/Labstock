@@ -20,6 +20,7 @@ npm run dev
 | `/login` | Connexion par e-mail et mot de passe |
 | `/` | Tableau de bord : indicateurs, répartition du stock, état des factures, mouvements, alertes |
 | `/goods` | Gestion des lots en FEFO : saisie, liste filtrable, fiche détaillée, compteurs |
+| `/issues` | Sorties de stock : analyses prescrites, consommables calculés, déduction |
 
 La navigation vit dans une barre latérale permanente. Les entrées marquées
 « Bientôt » ne sont pas encore construites et ne pointent volontairement vers
@@ -66,6 +67,39 @@ l'enregistrement.
 
 La suppression de lot n'est volontairement pas exposée : l'historique des lots
 fait partie de la traçabilité. Une désactivation explicite serait préférable.
+
+## Sorties de stock (consommation liée aux analyses)
+
+Chaque analyse déclare ses consommables et un **coefficient de consommation**
+par test (`analysis_consumables`). La vue `pending_consumables` en déduit les
+quantités à sortir pour les analyses encore en attente.
+
+Le calcul est fait **par analyse** : pour un consommable donné, seuls les
+échantillons des analyses qui l'utilisent réellement sont comptés. Multiplier
+chaque consommable par le total des échantillons imputerait par exemple des
+tubes EDTA à une glycémie, qui n'en consomme aucun. Les quantités sont
+arrondies au supérieur, un consommable étant indivisible.
+
+La déduction passe par `issue_stock()`, en **une seule transaction** :
+
+- les analyses en attente sont verrouillées puis marquées `consumed`, ce qui
+  rend un double envoi inoffensif ;
+- les lots sont consommés en FEFO, en cascade si le premier ne suffit pas ;
+- `products.stock_qty`, `lots.current_qty`, `stock_movements` et l'historique
+  de sortie sont mis à jour ensemble ;
+- si un seul consommable manque, **rien** n'est déduit.
+
+`issue_stock()` et `sync_lis_orders()` sont en `SECURITY DEFINER`, à dessein :
+la mutation du stock reste le monopole de ces procédures. Accorder `UPDATE`
+sur `products` au rôle `authenticated` laisserait n'importe quel client fixer
+un stock arbitraire en contournant le calcul FEFO et la traçabilité. En
+contrepartie, les deux fonctions vérifient `auth.uid()` dans leur corps, figent
+leur `search_path` et ne sont exécutables que par `authenticated`.
+
+> ⚠️ **Aucun connecteur LIS réel n'est branché.** `sync_lis_orders()` fabrique
+> un lot d'analyses prescrites pour rendre le flux exécutable ; la source est
+> affichée comme « Simulé » dans l'interface. Un vrai connecteur remplacerait
+> le corps de cette fonction en insérant dans `lis_orders`.
 
 ## Architecture des données
 

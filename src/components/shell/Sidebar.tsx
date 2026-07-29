@@ -34,8 +34,8 @@ const NAV: NavGroup[] = [
     title: "Stock",
     items: [
       { label: "Marchandises", href: "/goods", icon: Boxes },
+      { label: "Sorties de stock", href: "/issues", icon: ArrowLeftRight },
       { label: "Produits", icon: Package },
-      { label: "Mouvements", icon: ArrowLeftRight },
       { label: "Inventaire", icon: ClipboardCheck },
     ],
   },

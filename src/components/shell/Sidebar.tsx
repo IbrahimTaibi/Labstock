@@ -37,8 +37,8 @@ const NAV: NavGroup[] = [
       { label: "Marchandises", href: "/goods", icon: Boxes },
       { label: "Réceptions", href: "/receipts", icon: Truck },
       { label: "Sorties de stock", href: "/issues", icon: ArrowLeftRight },
+      { label: "Inventaire", href: "/inventory", icon: ClipboardCheck },
       { label: "Produits", icon: Package },
-      { label: "Inventaire", icon: ClipboardCheck },
     ],
   },
   {

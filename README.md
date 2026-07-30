@@ -22,6 +22,7 @@ npm run dev
 | `/goods` | Gestion des lots en FEFO : saisie, liste filtrable, fiche détaillée, compteurs |
 | `/receipts` | Réceptions fournisseurs : bon de commande, saisie de lot, contrôles ISO |
 | `/issues` | Sorties de stock : analyses prescrites, consommables calculés, déduction |
+| `/inventory` | Inventaire physique : comptage des lots et régularisation des écarts |
 
 La navigation vit dans une barre latérale permanente. Les entrées marquées
 « Bientôt » ne sont pas encore construites et ne pointent volontairement vers
@@ -121,6 +122,31 @@ leur `search_path` et ne sont exécutables que par `authenticated`.
 > un lot d'analyses prescrites pour rendre le flux exécutable ; la source est
 > affichée comme « Simulé » dans l'interface. Un vrai connecteur remplacerait
 > le corps de cette fonction en insérant dans `lis_orders`.
+
+## Inventaire physique
+
+Les sorties calculées depuis les analyses ne couvrent que la consommation
+**théorique**. La casse, les contrôles qualité, les analyses refaites et les
+erreurs de saisie n'y figurent pas : le stock théorique dérive donc du réel.
+`/inventory` est ce qui le ramène au réel.
+
+- **Ouverture** : la quantité attendue de chaque lot est **figée** dans
+  `inventory_lines`. Les écarts se mesurent contre cette photographie, pas
+  contre un stock qui bouge pendant qu'on compte.
+- Un seul comptage ouvert à la fois (index unique partiel) : deux sessions
+  concurrentes compareraient leurs écarts au même stock et se neutraliseraient.
+- **Clôture** : chaque lot compté est aligné sur la quantité vue — et non
+  corrigé du delta — afin d'absorber les mouvements survenus pendant le
+  comptage sans les compter deux fois. Un mouvement de régularisation est écrit
+  pour chaque écart.
+- Les lignes **non comptées restent intactes** : un lot qu'on n'a pas vu n'est
+  pas un lot absent, et le mettre à zéro détruirait du stock réel.
+
+Les régularisations sont des mouvements `in`/`out` porteurs du drapeau
+`is_adjustment`. Elles comptent donc dans la reconstruction de l'historique de
+stock — elles l'ont réellement modifié — mais sont **exclues** des indicateurs
+« entrées / sorties du mois », qui décrivent des flux réels : sans cela un écart
+d'inventaire se lirait comme une consommation.
 
 ## Architecture des données
 

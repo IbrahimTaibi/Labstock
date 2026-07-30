@@ -251,3 +251,50 @@ export type ReceiptsWorkspaceData = {
   lines: OrderLine[];
   history: ReceiptHistoryEntry[];
 };
+
+export type InventoryScope = "full" | "category";
+export type InventoryStatus = "open" | "closed" | "cancelled";
+
+export type InventorySession = {
+  id: number;
+  reference: string;
+  scope: InventoryScope;
+  category_id: number | null;
+  status: InventoryStatus;
+  opened_at: string;
+  opened_by: string;
+  closed_at: string | null;
+  closed_by: string | null;
+  counted_lines: number;
+  variance_units: number;
+  variance_value: number;
+};
+
+export type InventoryLine = {
+  id: number;
+  session_id: number;
+  lot_id: number;
+  product_id: number;
+  product_name: string;
+  reference: string;
+  category: string;
+  lot_number: string;
+  expiry_date: string;
+  expected_qty: number;
+  counted_qty: number | null;
+  unit_price: number;
+  counted_at: string | null;
+  counted_by: string | null;
+  is_counted: boolean;
+  variance_units: number | null;
+  variance_value: number | null;
+};
+
+export type CategoryOption = { id: number; name: string };
+
+export type InventoryWorkspaceData = {
+  openSession: InventorySession | null;
+  lines: InventoryLine[];
+  categories: CategoryOption[];
+  history: InventorySession[];
+};

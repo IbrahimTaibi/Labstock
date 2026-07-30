@@ -1,0 +1,5 @@
+project_id = "labstock"
+
+[db]
+# Doit correspondre à la version du projet distant (Postgres 17).
+major_version = 17

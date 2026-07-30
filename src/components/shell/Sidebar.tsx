@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
   Boxes,
+  Building2,
   ClipboardCheck,
   FileText,
   FlaskConical,
@@ -34,6 +35,7 @@ const NAV: NavGroup[] = [
     title: "Stock",
     items: [
       { label: "Marchandises", href: "/goods", icon: Boxes },
+      { label: "Réceptions", href: "/receipts", icon: Truck },
       { label: "Sorties de stock", href: "/issues", icon: ArrowLeftRight },
       { label: "Produits", icon: Package },
       { label: "Inventaire", icon: ClipboardCheck },
@@ -42,7 +44,7 @@ const NAV: NavGroup[] = [
   {
     title: "Achats",
     items: [
-      { label: "Fournisseurs", icon: Truck },
+      { label: "Fournisseurs", icon: Building2 },
       { label: "Factures", icon: FileText },
     ],
   },

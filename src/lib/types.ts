@@ -208,3 +208,46 @@ export type IssueWorkspaceData = {
   history: IssueHistoryEntry[];
   lastSync: string | null;
 };
+
+export type DeliveryStatus = "pending" | "partial" | "received";
+
+export type PurchaseOrderOption = {
+  id: number;
+  number: string;
+  supplier: string;
+  ordered_at: string;
+  status: DeliveryStatus;
+};
+
+export type OrderLine = {
+  id: number;
+  order_id: number;
+  order_number: string;
+  product_id: number;
+  product_name: string;
+  reference: string;
+  category: string;
+  supplier: string;
+  quantity_ordered: number;
+  quantity_received: number;
+  quantity_remaining: number;
+  unit_price: number;
+  packaging: string | null;
+  delivery_status: DeliveryStatus;
+};
+
+export type ReceiptHistoryEntry = {
+  id: number;
+  received_at: string;
+  operator: string;
+  quantity: number;
+  reference: string;
+  lot_number: string | null;
+};
+
+export type ReceiptsWorkspaceData = {
+  orders: PurchaseOrderOption[];
+  selectedOrder: PurchaseOrderOption | null;
+  lines: OrderLine[];
+  history: ReceiptHistoryEntry[];
+};

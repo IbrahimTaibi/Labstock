@@ -20,6 +20,7 @@ npm run dev
 | `/login` | Connexion par e-mail et mot de passe |
 | `/` | Tableau de bord : indicateurs, répartition du stock, état des factures, mouvements, alertes |
 | `/goods` | Gestion des lots en FEFO : saisie, liste filtrable, fiche détaillée, compteurs |
+| `/receipts` | Réceptions fournisseurs : bon de commande, saisie de lot, contrôles ISO |
 | `/issues` | Sorties de stock : analyses prescrites, consommables calculés, déduction |
 
 La navigation vit dans une barre latérale permanente. Les entrées marquées
@@ -67,6 +68,26 @@ l'enregistrement.
 
 La suppression de lot n'est volontairement pas exposée : l'historique des lots
 fait partie de la traçabilité. Une désactivation explicite serait préférable.
+
+## Réceptions fournisseurs
+
+`/receipts` est l'entrée de stock, symétrique des sorties. On choisit une ligne
+de bon de commande, on saisit la quantité livrée, le numéro de lot et la
+péremption ; `receive_goods()` crée le lot, augmente le stock, écrit un
+mouvement d'entrée, incrémente le reçu de la ligne et recalcule le statut de la
+commande — le tout dans une seule transaction.
+
+Les **contrôles ISO 15189** affichés à droite ne sont pas décoratifs : ce sont
+exactement les validations appliquées en base. Le serveur refuse une péremption
+déjà atteinte, un lot vide, une quantité supérieure au reste à recevoir, et
+distingue deux cas au numéro de lot déjà connu :
+
+- même produit et même péremption → **complément** de lot (une commande peut
+  arriver en plusieurs livraisons) ;
+- produit ou péremption différents → **refus**, c'est une erreur de saisie.
+
+La ligne de commande est verrouillée pendant la transaction, donc deux
+réceptions simultanées ne peuvent pas dépasser ensemble la quantité commandée.
 
 ## Sorties de stock (consommation liée aux analyses)
 

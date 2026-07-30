@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 export function DataTable({ children }: { children: React.ReactNode }) {
@@ -67,15 +68,22 @@ export function Td({
   );
 }
 
-export function ViewAllLink({ label = "Voir tous" }: { label?: string }) {
+/** Renvoie vers la page complète correspondant à l'extrait affiché. */
+export function ViewAllLink({
+  href,
+  label = "Voir tous",
+}: {
+  href: string;
+  label?: string;
+}) {
   return (
     <div className="pt-2 text-center">
-      <button
-        type="button"
+      <Link
+        href={href}
         className="text-[11px] font-medium text-[var(--series-1)] hover:underline"
       >
         {label}
-      </button>
+      </Link>
     </div>
   );
 }

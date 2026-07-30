@@ -24,6 +24,11 @@ type NavItem = {
 
 type NavGroup = { title: string; items: NavItem[] };
 
+const ADMIN_NAV: NavGroup = {
+  title: "Administration",
+  items: [{ label: "Laboratoires", href: "/labs", icon: FlaskConical }],
+};
+
 /* Les entrées sans href ne sont pas encore construites : elles restent
    visibles pour situer le produit, mais ne promettent pas une page. */
 const NAV: NavGroup[] = [
@@ -38,24 +43,31 @@ const NAV: NavGroup[] = [
       { label: "Réceptions", href: "/receipts", icon: Truck },
       { label: "Sorties de stock", href: "/issues", icon: ArrowLeftRight },
       { label: "Inventaire", href: "/inventory", icon: ClipboardCheck },
-      { label: "Produits", icon: Package },
+      { label: "Produits", href: "/products", icon: Package },
     ],
   },
   {
     title: "Achats",
     items: [
-      { label: "Fournisseurs", icon: Building2 },
-      { label: "Factures", icon: FileText },
+      { label: "Fournisseurs", href: "/suppliers", icon: Building2 },
+      { label: "Factures", href: "/invoices", icon: FileText },
     ],
   },
   {
     title: "Système",
-    items: [{ label: "Paramètres", icon: Settings }],
+    items: [{ label: "Paramètres", href: "/settings", icon: Settings }],
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({
+  isAdmin = false,
+  labName,
+}: {
+  isAdmin?: boolean;
+  labName?: string | null;
+}) {
   const pathname = usePathname();
+  const nav = isAdmin ? [...NAV, ADMIN_NAV] : NAV;
 
   return (
     <aside className="sticky top-0 hidden h-screen w-[232px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--surface)] lg:flex">
@@ -71,13 +83,13 @@ export function Sidebar() {
             LABSTOCK
           </div>
           <div className="truncate text-[9px] leading-tight text-[var(--text-muted)]">
-            Gestion des stocks de laboratoire
+            {labName ?? "Gestion des stocks de laboratoire"}
           </div>
         </div>
       </div>
 
       <nav className="flex-1 overflow-y-auto px-3 py-3">
-        {NAV.map((group) => (
+        {nav.map((group) => (
           <div key={group.title} className="mb-4">
             <div className="mb-1.5 px-2 text-[9px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
               {group.title}

@@ -1,3 +1,179 @@
+export type Laboratory = {
+  id: number;
+  name: string;
+  created_at: string;
+  member_count: number;
+  is_active: boolean;
+};
+
+export type LabUser = {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: "admin" | "member";
+  lab_id: number | null;
+};
+
+export type LabsWorkspaceData = {
+  laboratories: Laboratory[];
+  users: LabUser[];
+};
+
+export type SupplierProfile = {
+  id: number;
+  name: string;
+  contact_name: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  notes: string | null;
+};
+
+export type SupplierProduct = {
+  id: number;
+  supplier_id: number;
+  name: string;
+  reference: string | null;
+  category: string;
+  stock_qty: number;
+  min_stock: number;
+  unit_price: number;
+};
+
+export type SupplierOrder = {
+  id: number;
+  supplier_id: number;
+  number: string;
+  ordered_at: string;
+  status: DeliveryStatus;
+  lines: number;
+  total: number;
+};
+
+export type SupplierInvoice = {
+  id: number;
+  supplier_id: number;
+  number: string;
+  amount: number;
+  status: InvoiceStatus;
+  issue_date: string;
+  due_date: string;
+  payment_date: string | null;
+};
+
+export type SupplierRow = SupplierProfile & {
+  products: number;
+  stock_value: number;
+  open_orders: number;
+  invoice_count: number;
+  invoiced_total: number;
+  pending_amount: number;
+  overdue_count: number;
+  overdue_amount: number;
+  last_invoice_date: string | null;
+  /** Part du total facturé du laboratoire (0–1). */
+  share: number;
+};
+
+export type SuppliersWorkspaceData = {
+  suppliers: SupplierRow[];
+  products: SupplierProduct[];
+  orders: SupplierOrder[];
+  /** Factures récentes par fournisseur (20 max) ; les totaux couvrent tout. */
+  invoices: SupplierInvoice[];
+  totals: {
+    invoiced: number;
+    pending: number;
+    overdue: number;
+    overdue_count: number;
+  };
+};
+
+export type ProductStockState = "ok" | "low" | "out";
+
+export type ProductRow = {
+  id: number;
+  name: string;
+  reference: string | null;
+  /** Référence affichée : la vraie, sinon le repli REF-000123. */
+  display_reference: string;
+  category_id: number;
+  category: string;
+  supplier_id: number;
+  supplier: string;
+  unit_price: number;
+  stock_qty: number;
+  min_stock: number;
+  stock_value: number;
+  state: ProductStockState;
+  created_at: string;
+};
+
+export type ProductLot = {
+  id: number;
+  product_id: number;
+  lot_number: string;
+  expiry_date: string;
+  current_qty: number;
+  is_expired: boolean;
+};
+
+export type ProductsWorkspaceData = {
+  products: ProductRow[];
+  /** Lots encore détenus, pour le détail par produit. */
+  lots: ProductLot[];
+  categories: { id: number; name: string }[];
+  suppliers: { id: number; name: string }[];
+  totals: {
+    count: number;
+    stock_value: number;
+    ok_count: number;
+    low_count: number;
+    out_count: number;
+  };
+};
+
+export type CategoryRow = {
+  id: number;
+  name: string;
+  /** Nombre de produits rattachés ; une catégorie utilisée ne se supprime pas. */
+  products: number;
+};
+
+export type SettingsWorkspaceData = {
+  categories: CategoryRow[];
+};
+
+export type InvoiceRow = {
+  id: number;
+  number: string;
+  supplier_id: number;
+  supplier: string;
+  amount: number;
+  status: InvoiceStatus;
+  issue_date: string;
+  due_date: string;
+  payment_date: string | null;
+  /** Jours de retard d'une facture non payée échue ; 0 sinon. */
+  days_late: number;
+};
+
+export type InvoicesWorkspaceData = {
+  invoices: InvoiceRow[];
+  suppliers: { id: number; name: string }[];
+  /** Catalogue pour composer les lignes d'une nouvelle facture. */
+  products: { id: number; name: string; supplier_id: number; unit_price: number }[];
+  totals: {
+    invoiced: number;
+    paid_count: number;
+    paid_amount: number;
+    pending_count: number;
+    pending_amount: number;
+    overdue_count: number;
+    overdue_amount: number;
+  };
+};
+
 export type KpiPoint = {
   month: string;
   skus: number;

@@ -238,7 +238,7 @@ export default async function DashboardPage() {
               ))}
             </tbody>
           </DataTable>
-          <ViewAllLink />
+          <ViewAllLink href="/products" label="Voir le catalogue" />
         </Card>
 
         <Card>
@@ -268,7 +268,7 @@ export default async function DashboardPage() {
               ))}
             </tbody>
           </DataTable>
-          <ViewAllLink />
+          <ViewAllLink href="/products" label="Voir le catalogue" />
         </Card>
 
         <Card>
@@ -298,7 +298,7 @@ export default async function DashboardPage() {
               ))}
             </tbody>
           </DataTable>
-          <ViewAllLink />
+          <ViewAllLink href="/suppliers" label="Voir tous les fournisseurs" />
         </Card>
 
         <Card>
@@ -484,7 +484,10 @@ export default async function DashboardPage() {
               ))}
             </tbody>
           </DataTable>
-          <ViewAllLink />
+          <ViewAllLink
+            href="/products?etat=alerte"
+            label="Voir tous les produits en alerte"
+          />
         </Card>
 
         <Card>
@@ -535,7 +538,10 @@ export default async function DashboardPage() {
               ))}
             </tbody>
           </DataTable>
-          <ViewAllLink label="Voir toutes" />
+          <ViewAllLink
+            href="/invoices?statut=overdue"
+            label="Voir toutes les factures en retard"
+          />
         </Card>
 
         <Card>

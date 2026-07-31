@@ -70,14 +70,34 @@ export async function getInvoiceDocument(
 export async function getInvoicesWorkspace(): Promise<InvoicesWorkspaceData> {
   const supabase = await createClient();
 
-  const [invoicesRes, suppliersRes, productsRes] = await Promise.all([
-    supabase
+  /* PostgREST plafonne une réponse à 1 000 lignes : sans pagination, les
+     totaux de l'écran ne porteraient que sur une partie des factures et
+     seraient donc faux. */
+  const PAGE = 1000;
+  const invoiceRows: NonNullable<
+    Awaited<ReturnType<typeof fetchInvoicePage>>["data"]
+  > = [];
+
+  function fetchInvoicePage(from: number) {
+    return supabase
       .from("invoices")
       .select(
         "id, number, supplier_id, amount, status, issue_date, due_date, payment_date, suppliers(name)"
       )
       .order("issue_date", { ascending: false })
-      .order("id", { ascending: false }),
+      .order("id", { ascending: false })
+      .range(from, from + PAGE - 1);
+  }
+
+  for (let offset = 0; ; offset += PAGE) {
+    const page = await fetchInvoicePage(offset);
+    if (page.error)
+      throw new Error(`Chargement des factures : ${page.error.message}`);
+    invoiceRows.push(...(page.data ?? []));
+    if ((page.data?.length ?? 0) < PAGE) break;
+  }
+
+  const [suppliersRes, productsRes] = await Promise.all([
     supabase.from("suppliers").select("id, name").order("name"),
     supabase
       .from("products")
@@ -85,8 +105,6 @@ export async function getInvoicesWorkspace(): Promise<InvoicesWorkspaceData> {
       .order("name"),
   ]);
 
-  if (invoicesRes.error)
-    throw new Error(`Chargement des factures : ${invoicesRes.error.message}`);
   if (suppliersRes.error)
     throw new Error(
       `Chargement des fournisseurs : ${suppliersRes.error.message}`
@@ -104,7 +122,7 @@ export async function getInvoicesWorkspace(): Promise<InvoicesWorkspaceData> {
   const supplierName = (value: SupplierJoin) =>
     (Array.isArray(value) ? value[0]?.name : value?.name) ?? "—";
 
-  const invoices: InvoiceRow[] = (invoicesRes.data ?? []).map((f) => ({
+  const invoices: InvoiceRow[] = invoiceRows.map((f) => ({
     id: f.id,
     number: f.number,
     supplier_id: f.supplier_id,

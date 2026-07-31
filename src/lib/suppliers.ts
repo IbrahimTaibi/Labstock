@@ -17,7 +17,35 @@ const RECENT_INVOICES_PER_SUPPLIER = 20;
 export async function getSuppliersWorkspace(): Promise<SuppliersWorkspaceData> {
   const supabase = await createClient();
 
-  const [suppliersRes, productsRes, invoicesRes, ordersRes, orderLinesRes] =
+  /* PostgREST plafonne une réponse à 1 000 lignes : les encours par
+     fournisseur porteraient sinon sur une partie seulement des factures. */
+  const PAGE = 1000;
+  const invoiceRows: {
+    id: number;
+    supplier_id: number;
+    number: string;
+    amount: number;
+    status: SupplierInvoice["status"];
+    issue_date: string;
+    due_date: string;
+    payment_date: string | null;
+  }[] = [];
+
+  for (let offset = 0; ; offset += PAGE) {
+    const page = await supabase
+      .from("invoices")
+      .select(
+        "id, supplier_id, number, amount, status, issue_date, due_date, payment_date"
+      )
+      .order("issue_date", { ascending: false })
+      .range(offset, offset + PAGE - 1);
+    if (page.error)
+      throw new Error(`Chargement des factures : ${page.error.message}`);
+    invoiceRows.push(...(page.data ?? []));
+    if ((page.data?.length ?? 0) < PAGE) break;
+  }
+
+  const [suppliersRes, productsRes, ordersRes, orderLinesRes] =
     await Promise.all([
       supabase
         .from("suppliers")
@@ -30,12 +58,6 @@ export async function getSuppliersWorkspace(): Promise<SuppliersWorkspaceData> {
         )
         .order("name"),
       supabase
-        .from("invoices")
-        .select(
-          "id, supplier_id, number, amount, status, issue_date, due_date, payment_date"
-        )
-        .order("issue_date", { ascending: false }),
-      supabase
         .from("purchase_orders")
         .select("id, supplier_id, number, ordered_at, status")
         .order("ordered_at", { ascending: false }),
@@ -44,13 +66,7 @@ export async function getSuppliersWorkspace(): Promise<SuppliersWorkspaceData> {
         .select("order_id, quantity_ordered, unit_price"),
     ]);
 
-  for (const res of [
-    suppliersRes,
-    productsRes,
-    invoicesRes,
-    ordersRes,
-    orderLinesRes,
-  ]) {
+  for (const res of [suppliersRes, productsRes, ordersRes, orderLinesRes]) {
     if (res.error)
       throw new Error(`Chargement des fournisseurs : ${res.error.message}`);
   }
@@ -134,7 +150,7 @@ export async function getSuppliersWorkspace(): Promise<SuppliersWorkspaceData> {
   const recentInvoices: SupplierInvoice[] = [];
   const recentCount = new Map<number, number>();
 
-  for (const f of invoicesRes.data ?? []) {
+  for (const f of invoiceRows) {
     const entry = of(f.supplier_id);
     const amount = Number(f.amount);
     entry.invoice_count += 1;

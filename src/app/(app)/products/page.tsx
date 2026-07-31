@@ -1,3 +1,4 @@
+import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ProductsWorkspace } from "@/components/products/ProductsWorkspace";
 import type { StateFilter } from "@/components/products/ProductsWorkspace";
@@ -26,6 +27,7 @@ export default async function ProductsPage({
       <PageHeader
         title="Produits"
         subtitle="Catalogue du laboratoire : références, seuils et valorisation"
+        actions={<ExportCsvButton kind="products" />}
       />
 
       <ProductsWorkspace

@@ -1,3 +1,4 @@
+import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { SuppliersWorkspace } from "@/components/suppliers/SuppliersWorkspace";
 import { getSuppliersWorkspace } from "@/lib/suppliers";
@@ -12,6 +13,7 @@ export default async function SuppliersPage() {
       <PageHeader
         title="Fournisseurs"
         subtitle="Référentiel fournisseurs : produits, commandes et encours de facturation"
+        actions={<ExportCsvButton kind="suppliers" />}
       />
 
       <SuppliersWorkspace data={data} />

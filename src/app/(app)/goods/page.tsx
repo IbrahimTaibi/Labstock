@@ -2,11 +2,11 @@ import {
   Boxes,
   CheckCircle2,
   Clock,
-  FileDown,
   ScanBarcode,
   XCircle,
 } from "lucide-react";
 
+import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { GoodsWorkspace } from "@/components/goods/GoodsWorkspace";
 import { computeLotStats, getLots, getProductOptions } from "@/lib/lots";
@@ -32,13 +32,7 @@ export default async function GoodsPage() {
               <ScanBarcode size={14} aria-hidden />
               Imprimer codes-barres
             </button>
-            <button
-              type="button"
-              className="card flex items-center gap-2 px-3 py-2.5 text-[11px] font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--page)]"
-            >
-              <FileDown size={14} aria-hidden />
-              Exporter
-            </button>
+            <ExportCsvButton kind="lots" />
           </>
         }
       />

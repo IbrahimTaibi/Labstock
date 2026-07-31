@@ -1,3 +1,4 @@
+import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { InvoicesWorkspace } from "@/components/invoices/InvoicesWorkspace";
 import type { StatusFilter } from "@/components/invoices/InvoicesWorkspace";
@@ -25,6 +26,7 @@ export default async function InvoicesPage({
       <PageHeader
         title="Factures fournisseurs"
         subtitle="Suivi des factures : encours, échéances et règlements"
+        actions={<ExportCsvButton kind="invoices" />}
       />
 
       <InvoicesWorkspace

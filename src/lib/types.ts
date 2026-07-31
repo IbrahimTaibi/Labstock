@@ -158,6 +158,31 @@ export type InvoiceRow = {
   days_late: number;
 };
 
+export type InvoiceDocumentLine = {
+  id: number;
+  description: string;
+  quantity: number;
+  unit_price: number;
+};
+
+/** Facture prête à imprimer : en-tête, émetteur, lignes. */
+export type InvoiceDocument = {
+  number: string;
+  amount: number;
+  status: InvoiceStatus;
+  issue_date: string;
+  due_date: string;
+  payment_date: string | null;
+  supplier: {
+    name: string;
+    contact_name: string | null;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+  };
+  lines: InvoiceDocumentLine[];
+};
+
 export type InvoicesWorkspaceData = {
   invoices: InvoiceRow[];
   suppliers: { id: number; name: string }[];

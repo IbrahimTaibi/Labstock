@@ -182,3 +182,21 @@ body {
 .labstock-calendar .rdp-disabled {
   opacity: 0.35;
 }
+
+/* Impression : marges de page et fonds conservés (les aplats de statut
+   perdraient leur sens en blanc). Le reste du cadrage est porté par les
+   variantes `print:` de Tailwind, au plus près des composants. */
+@page {
+  size: A4;
+  margin: 14mm;
+}
+
+@media print {
+  html,
+  body {
+    background: #fff;
+    color: #000;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

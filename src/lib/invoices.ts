@@ -1,5 +1,66 @@
 import { createClient } from "./supabase/server";
-import type { InvoiceRow, InvoicesWorkspaceData } from "./types";
+import type {
+  InvoiceDocument,
+  InvoiceRow,
+  InvoicesWorkspaceData,
+} from "./types";
+
+/**
+ * Facture unique avec son fournisseur et ses lignes, pour l'impression.
+ * Le RLS cadre la lecture au laboratoire : une facture appartenant à un
+ * autre laboratoire est simplement introuvable.
+ */
+export async function getInvoiceDocument(
+  id: number
+): Promise<InvoiceDocument | null> {
+  const supabase = await createClient();
+
+  const [invoiceRes, linesRes] = await Promise.all([
+    supabase
+      .from("invoices")
+      .select(
+        "number, amount, status, issue_date, due_date, payment_date, suppliers(name, contact_name, email, phone, address)"
+      )
+      .eq("id", id)
+      .maybeSingle(),
+    supabase
+      .from("invoice_lines")
+      .select("id, description, quantity, unit_price")
+      .eq("invoice_id", id)
+      .order("id"),
+  ]);
+
+  if (invoiceRes.error)
+    throw new Error(`Chargement de la facture : ${invoiceRes.error.message}`);
+  if (linesRes.error)
+    throw new Error(`Chargement des lignes : ${linesRes.error.message}`);
+  if (!invoiceRes.data) return null;
+
+  const row = invoiceRes.data;
+  type SupplierJoin = InvoiceDocument["supplier"];
+  const joined = row.suppliers as SupplierJoin | SupplierJoin[] | null;
+  const supplier = (Array.isArray(joined) ? joined[0] : joined) ?? {
+    name: "—",
+    contact_name: null,
+    email: null,
+    phone: null,
+    address: null,
+  };
+
+  return {
+    number: row.number,
+    amount: Number(row.amount),
+    status: row.status,
+    issue_date: row.issue_date,
+    due_date: row.due_date,
+    payment_date: row.payment_date,
+    supplier,
+    lines: (linesRes.data ?? []).map((line) => ({
+      ...line,
+      unit_price: Number(line.unit_price),
+    })),
+  };
+}
 
 /**
  * Toutes les factures du laboratoire avec leur fournisseur, plus les totaux

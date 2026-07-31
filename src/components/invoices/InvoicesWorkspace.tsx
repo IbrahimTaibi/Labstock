@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   Banknote,
@@ -12,6 +13,7 @@ import {
   FileText,
   Loader2,
   Plus,
+  Printer,
   Search,
   Trash2,
   TriangleAlert,
@@ -561,6 +563,13 @@ export function InvoicesWorkspace({
               )}
 
               <div className="mt-3 flex flex-col gap-2 border-t border-[var(--border)] pt-3">
+                <Link
+                  href={`/invoices/${selected.id}/print`}
+                  className="flex h-8 items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--page)]"
+                >
+                  <Printer size={13} strokeWidth={2.2} aria-hidden />
+                  Imprimer la facture
+                </Link>
                 {selected.status !== "paid" ? (
                   <button
                     type="button"

@@ -285,7 +285,8 @@ export type Dashboard = {
   overdueInvoices: OverdueInvoice[];
   indicators: Indicators;
   alerts: Alerts;
-  period: { start: string; end: string };
+  /** `granularity` : pas des séries, choisi par la base selon la durée. */
+  period: { start: string; end: string; granularity: "day" | "month" };
 };
 
 export type Lot = {

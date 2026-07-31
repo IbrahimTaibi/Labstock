@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Plus, Save, X } from "lucide-react";
 import { saveProduct } from "@/app/(app)/products/actions";
 import type { ProductState } from "@/app/(app)/products/actions";
@@ -46,23 +46,24 @@ export function ProductForm({
   /** Repasse le formulaire en création depuis le mode édition. */
   onCreateNew: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [reference, setReference] = useState("");
-  const [categoryId, setCategoryId] = useState<number | "">("");
-  const [supplierId, setSupplierId] = useState<number | "">("");
-  const [unitPrice, setUnitPrice] = useState("");
-  const [minStock, setMinStock] = useState("5");
-
-  /* La fiche suit la sélection ; les brouillons ne survivent pas au
-     changement de produit, c'est voulu. */
-  useEffect(() => {
-    setName(product?.name ?? "");
-    setReference(product?.reference ?? "");
-    setCategoryId(product?.category_id ?? "");
-    setSupplierId(product?.supplier_id ?? "");
-    setUnitPrice(product ? String(product.unit_price) : "");
-    setMinStock(product ? String(product.min_stock) : "5");
-  }, [product]);
+  /* Les champs sont initialisés depuis le produit sélectionné. Le parent
+     remonte le composant via `key` quand la sélection change, ce qui repart
+     d'un état neuf : les brouillons ne survivent pas au changement de
+     produit, c'est voulu. */
+  const [name, setName] = useState(product?.name ?? "");
+  const [reference, setReference] = useState(product?.reference ?? "");
+  const [categoryId, setCategoryId] = useState<number | "">(
+    product?.category_id ?? ""
+  );
+  const [supplierId, setSupplierId] = useState<number | "">(
+    product?.supplier_id ?? ""
+  );
+  const [unitPrice, setUnitPrice] = useState(
+    product ? String(product.unit_price) : ""
+  );
+  const [minStock, setMinStock] = useState(
+    product ? String(product.min_stock) : "5"
+  );
 
   const price = Number.parseFloat(unitPrice.replace(",", "."));
   const minimum = Number.parseInt(minStock, 10);

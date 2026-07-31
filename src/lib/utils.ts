@@ -32,16 +32,21 @@ const MONTHS = [
   "Juil", "Août", "Sep", "Oct", "Nov", "Déc",
 ];
 
-/** "2026-07" -> "Juil 2026" */
-export function formatMonth(iso: string) {
-  const [year, month] = iso.split("-");
-  return `${MONTHS[Number(month) - 1]} ${year}`;
+/* Les séries du tableau de bord sont soit mensuelles ("2026-07"), soit
+   journalières ("2026-07-22") selon la durée de la période choisie. Les deux
+   formats se distinguent au nombre de segments. */
+
+/** "2026-07" -> "Juil 2026" ; "2026-07-22" -> "22 Juil 2026" */
+export function formatBucket(iso: string) {
+  const [year, month, day] = iso.split("-");
+  const label = `${MONTHS[Number(month) - 1]} ${year}`;
+  return day ? `${Number(day)} ${label}` : label;
 }
 
-/** "2026-07" -> "Juil" */
-export function formatMonthShort(iso: string) {
-  const [, month] = iso.split("-");
-  return MONTHS[Number(month) - 1];
+/** "2026-07" -> "Juil" ; "2026-07-22" -> "22/07" */
+export function formatBucketShort(iso: string) {
+  const [, month, day] = iso.split("-");
+  return day ? `${day}/${month}` : MONTHS[Number(month) - 1];
 }
 
 export function formatDate(iso: string) {

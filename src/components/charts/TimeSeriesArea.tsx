@@ -14,8 +14,8 @@ import { AXIS_STROKE, AXIS_TICK, GRID_STROKE } from "./chart-tokens";
 import {
   formatAmount,
   formatCompact,
-  formatMonth,
-  formatMonthShort,
+  formatBucket,
+  formatBucketShort,
 } from "@/lib/utils";
 
 /** Série unique dans le temps : aire lavée + ligne 2px + points cerclés. */
@@ -50,7 +50,7 @@ export function TimeSeriesArea({
           <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeWidth={1} />
           <XAxis
             dataKey="month"
-            tickFormatter={formatMonthShort}
+            tickFormatter={formatBucketShort}
             tick={AXIS_TICK}
             tickLine={false}
             axisLine={{ stroke: AXIS_STROKE }}
@@ -69,7 +69,7 @@ export function TimeSeriesArea({
               if (!active || !payload?.length) return null;
               return (
                 <TooltipBox
-                  title={formatMonth(String(label))}
+                  title={formatBucket(String(label))}
                   rows={[
                     {
                       label: seriesName,

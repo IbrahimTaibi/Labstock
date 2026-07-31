@@ -25,7 +25,6 @@ export default async function InvoicesPage({
       <PageHeader
         title="Factures fournisseurs"
         subtitle="Suivi des factures : encours, échéances et règlements"
-        alertCount={data.totals.overdue_count}
       />
 
       <InvoicesWorkspace

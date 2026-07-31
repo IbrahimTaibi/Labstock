@@ -16,8 +16,8 @@ import {
   formatAmount,
   formatCompact,
   formatInt,
-  formatMonth,
-  formatMonthShort,
+  formatBucket,
+  formatBucketShort,
 } from "@/lib/utils";
 
 export type NetMovementPoint = {
@@ -44,7 +44,7 @@ export function NetMovementLine({
           <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeWidth={1} />
           <XAxis
             dataKey="month"
-            tickFormatter={formatMonthShort}
+            tickFormatter={formatBucketShort}
             tick={tick}
             tickLine={false}
             axisLine={{ stroke: AXIS_STROKE }}
@@ -65,7 +65,7 @@ export function NetMovementLine({
               const point = payload[0].payload as NetMovementPoint;
               return (
                 <TooltipBox
-                  title={formatMonth(String(label))}
+                  title={formatBucket(String(label))}
                   rows={[
                     { label: "Solde unités", value: formatInt(point.netUnits), color },
                     { label: "Solde valeur", value: `${formatAmount(point.netValue)} DT` },

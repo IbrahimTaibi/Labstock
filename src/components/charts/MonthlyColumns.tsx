@@ -15,8 +15,8 @@ import { AXIS_STROKE, AXIS_TICK, GRID_STROKE } from "./chart-tokens";
 import {
   formatAmount,
   formatInt,
-  formatMonth,
-  formatMonthShort,
+  formatBucket,
+  formatBucketShort,
 } from "@/lib/utils";
 
 /** Colonnes mensuelles, série unique : tête arrondie 4px, base carrée. */
@@ -42,7 +42,7 @@ export function MonthlyColumns({
           <CartesianGrid vertical={false} stroke={GRID_STROKE} strokeWidth={1} />
           <XAxis
             dataKey="month"
-            tickFormatter={formatMonthShort}
+            tickFormatter={formatBucketShort}
             tick={AXIS_TICK}
             tickLine={false}
             axisLine={{ stroke: AXIS_STROKE }}
@@ -62,7 +62,7 @@ export function MonthlyColumns({
               const row = payload[0].payload as Record<string, number>;
               return (
                 <TooltipBox
-                  title={formatMonth(String(label))}
+                  title={formatBucket(String(label))}
                   rows={[
                     { label: seriesName, value: formatInt(row[dataKey]), color },
                     ...(extraTooltipRow

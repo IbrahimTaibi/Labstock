@@ -10,8 +10,16 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  /* suppressHydrationWarning : le script inline corrige data-theme avant
+     l'hydratation, l'attribut diffère donc forcément du rendu serveur. La
+     consigne ne vaut que pour <html> lui-même, pas pour l'arbre en dessous. */
   return (
-    <html lang="fr" className="h-full antialiased" data-theme="light">
+    <html
+      lang="fr"
+      className="h-full antialiased"
+      data-theme="light"
+      suppressHydrationWarning
+    >
       <head>
         {/* Applique le thème mémorisé avant le premier rendu (évite le flash) */}
         <script

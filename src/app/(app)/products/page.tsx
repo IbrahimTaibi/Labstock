@@ -26,7 +26,6 @@ export default async function ProductsPage({
       <PageHeader
         title="Produits"
         subtitle="Catalogue du laboratoire : références, seuils et valorisation"
-        alertCount={data.totals.low_count + data.totals.out_count}
       />
 
       <ProductsWorkspace

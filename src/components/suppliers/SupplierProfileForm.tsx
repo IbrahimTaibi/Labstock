@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Plus, Save, Trash2, X } from "lucide-react";
 import { deleteSupplier, saveSupplier } from "@/app/(app)/suppliers/actions";
 import type { SupplierState } from "@/app/(app)/suppliers/actions";
@@ -38,25 +38,17 @@ export function SupplierProfileForm({
   onRun: (action: () => Promise<SupplierState>) => void;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [contactName, setContactName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [address, setAddress] = useState("");
-  const [notes, setNotes] = useState("");
+  /* Les champs sont initialisés depuis le fournisseur sélectionné. Le parent
+     remonte le composant via `key` quand la sélection change, ce qui repart
+     d'un état neuf : les brouillons ne survivent pas au changement de
+     fournisseur, c'est voulu. */
+  const [name, setName] = useState(supplier?.name ?? "");
+  const [contactName, setContactName] = useState(supplier?.contact_name ?? "");
+  const [email, setEmail] = useState(supplier?.email ?? "");
+  const [phone, setPhone] = useState(supplier?.phone ?? "");
+  const [address, setAddress] = useState(supplier?.address ?? "");
+  const [notes, setNotes] = useState(supplier?.notes ?? "");
   const [confirmDelete, setConfirmDelete] = useState(false);
-
-  /* La fiche suit la sélection ; les brouillons ne survivent pas au
-     changement de fournisseur, c'est voulu. */
-  useEffect(() => {
-    setName(supplier?.name ?? "");
-    setContactName(supplier?.contact_name ?? "");
-    setEmail(supplier?.email ?? "");
-    setPhone(supplier?.phone ?? "");
-    setAddress(supplier?.address ?? "");
-    setNotes(supplier?.notes ?? "");
-    setConfirmDelete(false);
-  }, [supplier]);
 
   function submit(event: React.FormEvent) {
     event.preventDefault();

@@ -2,9 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { CalendarDays, Download, RefreshCw } from "lucide-react";
+import { Download, RefreshCw } from "lucide-react";
+import { PeriodPicker } from "@/components/PeriodPicker";
 import type { Dashboard } from "@/lib/types";
-import { formatDate } from "@/lib/utils";
 
 function toCsv(dashboard: Dashboard) {
   const rows: string[][] = [
@@ -57,17 +57,16 @@ export function DashboardActions({ dashboard }: { dashboard: Dashboard }) {
 
   return (
     <>
-      <div className="card flex items-center gap-2 px-3 py-2 text-[11px]">
-        <CalendarDays size={14} className="text-[var(--text-muted)]" aria-hidden />
-        <div className="leading-tight">
-          <div className="text-[9px] uppercase tracking-wider text-[var(--text-muted)]">
-            Période
-          </div>
-          <div className="tnum font-medium text-[var(--text-primary)]">
-            {formatDate(dashboard.period.start)} – {formatDate(dashboard.period.end)}
-          </div>
-        </div>
-      </div>
+      {/* La période pilote l'historique du tableau de bord. Elle passe par
+          l'URL : l'écran reste partageable et rechargeable tel quel. */}
+      <PeriodPicker
+        start={dashboard.period.start}
+        end={dashboard.period.end}
+        pending={isPending}
+        onApply={(start, end) =>
+          startTransition(() => router.push(`/?du=${start}&au=${end}`))
+        }
+      />
 
       <button
         type="button"

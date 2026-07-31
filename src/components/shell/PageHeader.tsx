@@ -8,12 +8,10 @@ export async function PageHeader({
   title,
   subtitle,
   actions,
-  alertCount = 0,
 }: {
   title: string;
   subtitle?: string;
   actions?: React.ReactNode;
-  alertCount?: number;
 }) {
   const user = await getCurrentUser();
   return (
@@ -31,17 +29,16 @@ export async function PageHeader({
         {actions}
         <ThemeToggle />
 
-        <span className="card relative grid h-[38px] w-[38px] place-items-center text-[var(--text-secondary)]">
+        {/* Le centre de notifications n'est pas construit : la cloche reste
+            visible pour situer le produit, mais n'en promet pas l'usage.
+            Les alertes chiffrées sont déjà portées par chaque page. */}
+        <span
+          aria-disabled="true"
+          title="Notifications — module à venir"
+          className="card grid h-[38px] w-[38px] cursor-not-allowed place-items-center text-[var(--text-muted)] opacity-60"
+        >
           <Bell size={15} strokeWidth={2.2} aria-hidden />
-          {alertCount > 0 ? (
-            <span
-              className="tnum absolute -right-1 -top-1 grid h-[16px] min-w-[16px] place-items-center rounded-full px-1 text-[9px] font-bold text-white"
-              style={{ background: "var(--critical)" }}
-            >
-              {alertCount > 99 ? "99+" : alertCount}
-            </span>
-          ) : null}
-          <span className="sr-only">{alertCount} alertes en cours</span>
+          <span className="sr-only">Notifications — module à venir</span>
         </span>
 
         {user ? <UserMenu user={user} /> : null}

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "react-day-picker/style.css";
 
 :root {
   color-scheme: light;
@@ -113,4 +114,71 @@ body {
 .recharts-wrapper:focus,
 .recharts-surface:focus {
   outline: none;
+}
+
+/* Calendrier (react-day-picker) : la feuille de la librairie est reprise,
+   puis recalée sur les jetons de l'application via ses variables CSS, pour
+   que le sélecteur de période suive les thèmes clair et sombre. */
+
+.labstock-calendar {
+  --rdp-accent-color: var(--series-1);
+  --rdp-accent-background-color: color-mix(in srgb, var(--series-1) 14%, transparent);
+  --rdp-today-color: var(--series-2);
+  --rdp-range_middle-background-color: color-mix(in srgb, var(--series-1) 12%, transparent);
+  --rdp-range_middle-color: var(--text-primary);
+  --rdp-day-height: 30px;
+  --rdp-day-width: 30px;
+  --rdp-day_button-height: 28px;
+  --rdp-day_button-width: 28px;
+  --rdp-font-family: inherit;
+  --rdp-outline: 2px solid var(--series-1);
+  --rdp-outline-selected: 2px solid var(--series-1);
+  font-size: 11px;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* La feuille d'origine dimensionne en mots-clés absolus (`large`, `smaller`),
+   insensibles à la taille du conteneur : chaque taille est donc réaffirmée en
+   pixels. Sans cela, une plage large met tous ses jours en `large` gras. */
+.labstock-calendar .rdp-month_caption,
+.labstock-calendar .rdp-caption_label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.labstock-calendar .rdp-weekday {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding-bottom: 2px;
+}
+
+.labstock-calendar .rdp-day,
+.labstock-calendar .rdp-day_button,
+.labstock-calendar .rdp-selected,
+.labstock-calendar .rdp-selected .rdp-day_button {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* Seules les deux bornes de la plage sont mises en avant. */
+.labstock-calendar .rdp-range_start .rdp-day_button,
+.labstock-calendar .rdp-range_end .rdp-day_button {
+  font-weight: 700;
+}
+
+.labstock-calendar .rdp-day_button:hover {
+  background: var(--page);
+}
+
+.labstock-calendar .rdp-chevron {
+  fill: var(--series-1);
+  width: 14px;
+  height: 14px;
+}
+
+.labstock-calendar .rdp-disabled {
+  opacity: 0.35;
 }

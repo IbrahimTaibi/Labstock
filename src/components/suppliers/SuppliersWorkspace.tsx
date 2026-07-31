@@ -167,7 +167,10 @@ export function SuppliersWorkspace({ data }: { data: SuppliersWorkspaceData }) {
           ) : null}
         </section>
 
+        {/* key : changer de fournisseur remonte le formulaire, donc repart
+            d'un état neuf sans resynchroniser champ par champ. */}
         <SupplierProfileForm
+          key={selected?.id ?? "nouveau"}
           supplier={selected}
           pending={pending}
           onRun={run}

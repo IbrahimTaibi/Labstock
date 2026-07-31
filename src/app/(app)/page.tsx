@@ -44,16 +44,36 @@ const INVOICE_STATUS_COLOR: Record<InvoiceStatus, string> = {
 
 const INVOICE_STATUS_ORDER: InvoiceStatus[] = ["paid", "pending", "overdue"];
 
-export default async function DashboardPage() {
-  const data = await getDashboard();
+/* Période demandée par l'URL (?du=2026-01-01&au=2026-03-31). Une date mal
+   formée est ignorée : la base retombe alors sur les 6 derniers mois. */
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const asDate = (raw: string | undefined) =>
+  raw && ISO_DATE.test(raw) ? raw : undefined;
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ du?: string; au?: string }>;
+}) {
+  const { du, au } = await searchParams;
+  const data = await getDashboard(asDate(du), asDate(au));
 
   const history = data.kpiHistory;
   const current = history[history.length - 1];
   const seriesOf = (key: keyof KpiPoint) =>
     history.map((point) => Number(point[key]));
 
-  const currentMovements =
-    data.movementsByMonth[data.movementsByMonth.length - 1];
+  /* Cumul sur toute la période : la répartition par catégorie couvre la même
+     fenêtre, les chiffres et le graphique doivent donc parler du même total. */
+  const periodMovements = data.movementsByMonth.reduce(
+    (totals, row) => ({
+      inbound: totals.inbound + row.inbound,
+      outbound: totals.outbound + row.outbound,
+      inbound_value: totals.inbound_value + row.inbound_value,
+      outbound_value: totals.outbound_value + row.outbound_value,
+    }),
+    { inbound: 0, outbound: 0, inbound_value: 0, outbound_value: 0 }
+  );
 
   const categorySlices: DonutSlice[] = data.stockByCategory.map(
     (row, index) => ({
@@ -94,16 +114,15 @@ export default async function DashboardPage() {
     netValue: row.inbound_value - row.outbound_value,
   }));
 
-  const netUnits = currentMovements.inbound - currentMovements.outbound;
+  const netUnits = periodMovements.inbound - periodMovements.outbound;
   const netValue =
-    currentMovements.inbound_value - currentMovements.outbound_value;
+    periodMovements.inbound_value - periodMovements.outbound_value;
 
   return (
     <main className="mx-auto w-full max-w-[1500px] p-4 md:p-5">
       <PageHeader
         title="Tableau de bord — Stock & Factures"
         subtitle="Vue d'ensemble en temps réel de votre activité"
-        alertCount={data.alerts.outOfStock + data.alerts.overdueInvoices}
         actions={<DashboardActions dashboard={data} />}
       />
 
@@ -188,8 +207,8 @@ export default async function DashboardPage() {
             title="Évolution de la valeur du stock"
             sub="DT"
             right={
-              <span className="text-[10px] text-[var(--text-muted)]">
-                6 derniers mois
+              <span className="tnum text-[10px] text-[var(--text-muted)]">
+                {formatDate(data.period.start)} – {formatDate(data.period.end)}
               </span>
             }
           />
@@ -316,11 +335,11 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* ---- Mouvements de stock du mois ---- */}
+      {/* ---- Mouvements de stock sur la période ---- */}
       <div className="mb-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
         <Card>
           <CardTitle
-            title="Entrées du mois"
+            title="Entrées de la période"
             sub="Valeur"
             icon={
               <ArrowDownCircle
@@ -334,7 +353,7 @@ export default async function DashboardPage() {
           <div className="mb-3 flex gap-6">
             <div>
               <div className="tnum text-[22px] font-semibold leading-none">
-                {formatInt(currentMovements.inbound)}
+                {formatInt(periodMovements.inbound)}
               </div>
               <div className="text-[10px] text-[var(--text-muted)]">
                 Unités entrées
@@ -342,7 +361,7 @@ export default async function DashboardPage() {
             </div>
             <div>
               <div className="tnum text-[22px] font-semibold leading-none">
-                {formatAmount(currentMovements.inbound_value)}
+                {formatAmount(periodMovements.inbound_value)}
                 <span className="ml-0.5 text-[11px] font-medium text-[var(--text-secondary)]">
                   DT
                 </span>
@@ -356,13 +375,13 @@ export default async function DashboardPage() {
             slices={movementSlices("in")}
             centerLabel="Entrées"
             size={140}
-            total={currentMovements.inbound_value}
+            total={periodMovements.inbound_value}
           />
         </Card>
 
         <Card>
           <CardTitle
-            title="Sorties du mois"
+            title="Sorties de la période"
             sub="Valeur"
             icon={
               <ArrowUpCircle
@@ -376,7 +395,7 @@ export default async function DashboardPage() {
           <div className="mb-3 flex gap-6">
             <div>
               <div className="tnum text-[22px] font-semibold leading-none">
-                {formatInt(currentMovements.outbound)}
+                {formatInt(periodMovements.outbound)}
               </div>
               <div className="text-[10px] text-[var(--text-muted)]">
                 Unités sorties
@@ -384,7 +403,7 @@ export default async function DashboardPage() {
             </div>
             <div>
               <div className="tnum text-[22px] font-semibold leading-none">
-                {formatAmount(currentMovements.outbound_value)}
+                {formatAmount(periodMovements.outbound_value)}
                 <span className="ml-0.5 text-[11px] font-medium text-[var(--text-secondary)]">
                   DT
                 </span>
@@ -398,7 +417,7 @@ export default async function DashboardPage() {
             slices={movementSlices("out")}
             centerLabel="Sorties"
             size={140}
-            total={currentMovements.outbound_value}
+            total={periodMovements.outbound_value}
           />
         </Card>
 

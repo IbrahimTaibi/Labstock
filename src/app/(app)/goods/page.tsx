@@ -23,7 +23,6 @@ export default async function GoodsPage() {
       <PageHeader
         title="Gestion des marchandises"
         subtitle="Ajouter, modifier et suivre les lots de marchandises en stock"
-        alertCount={stats.expired + stats.expiringSoon}
         actions={
           <>
             <button

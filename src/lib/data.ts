@@ -1,9 +1,19 @@
 import { createClient } from "./supabase/server";
 import type { Dashboard } from "./types";
 
-export async function getDashboard(): Promise<Dashboard> {
+/**
+ * Période libre (AAAA-MM-JJ). Sans bornes, la base retombe sur les 6 derniers
+ * mois ; elle recadre aussi les dates aberrantes plutôt que d'échouer.
+ */
+export async function getDashboard(
+  start?: string,
+  end?: string
+): Promise<Dashboard> {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("dashboard");
+  const { data, error } = await supabase.rpc("dashboard", {
+    p_start: start ?? null,
+    p_end: end ?? null,
+  });
   if (error) throw new Error(`Chargement du tableau de bord : ${error.message}`);
   return data as Dashboard;
 }

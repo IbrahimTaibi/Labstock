@@ -12,7 +12,6 @@ export default async function SuppliersPage() {
       <PageHeader
         title="Fournisseurs"
         subtitle="Référentiel fournisseurs : produits, commandes et encours de facturation"
-        alertCount={data.totals.overdue_count}
       />
 
       <SuppliersWorkspace data={data} />

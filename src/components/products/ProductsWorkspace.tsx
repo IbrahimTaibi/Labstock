@@ -25,7 +25,7 @@ import {
   formatDate,
   formatInt,
 } from "@/lib/utils";
-import type { ProductRow, ProductsWorkspaceData, ProductStockState } from "@/lib/types";
+import type { ProductsWorkspaceData, ProductStockState } from "@/lib/types";
 import { ProductForm } from "./ProductForm";
 
 const PAGE_SIZE = 25;
@@ -385,7 +385,10 @@ export function ProductsWorkspace({
         {/* Colonne latérale : fiche + lots */}
         <div className="flex flex-col gap-3">
           <div>
+            {/* key : changer de produit remonte le formulaire, donc repart
+                d'un état neuf sans resynchroniser champ par champ. */}
             <ProductForm
+              key={selected?.id ?? "nouveau"}
               product={selected}
               categories={data.categories}
               suppliers={data.suppliers}

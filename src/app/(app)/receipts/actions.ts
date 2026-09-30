@@ -7,7 +7,28 @@ import { createClient } from "@/lib/supabase/server";
 export type ReceiptState = {
   status: "idle" | "success" | "error";
   message: string;
+  /** Renseigné en cas de succès : cible de l'étiquette et de l'annulation. */
+  receipt?: {
+    receiptId: number;
+    lotId: number;
+    lotNumber: string;
+    quantity: number;
+    value: number;
+    fefoRank: number | null;
+    lotCreated: boolean;
+    orderStatus: string;
+  };
 };
+
+function revalidate() {
+  revalidatePath("/receipts");
+  /* La réception crée un lot et bouge le stock : marchandises, produits et
+     tableau de bord doivent suivre. */
+  revalidatePath("/goods");
+  revalidatePath("/products");
+  revalidatePath("/suppliers");
+  revalidatePath("/");
+}
 
 export async function receiveGoods(input: {
   orderLineId: number;
@@ -47,12 +68,13 @@ export async function receiveGoods(input: {
     return { status: "error", message: error.message };
   }
 
-  revalidatePath("/receipts");
-  revalidatePath("/goods");
-  revalidatePath("/");
+  revalidate();
 
   const result = data as {
+    receipt_id: number;
+    lot_id: number;
     quantity: number;
+    value: number;
     lot_number: string;
     lot_created: boolean;
     fefo_rank: number | null;
@@ -64,5 +86,45 @@ export async function receiveGoods(input: {
     message: `${result.quantity} unités reçues — lot « ${result.lot_number} » ${
       result.lot_created ? "créé" : "complété"
     }, priorité FEFO ${result.fefo_rank ?? "—"}.`,
+    receipt: {
+      receiptId: result.receipt_id,
+      lotId: result.lot_id,
+      lotNumber: result.lot_number,
+      quantity: result.quantity,
+      value: Number(result.value),
+      fefoRank: result.fefo_rank,
+      lotCreated: result.lot_created,
+      orderStatus: result.order_status,
+    },
+  };
+}
+
+/**
+ * Contre-passe une réception validée. Rien n'est effacé : la réception
+ * d'origine est marquée annulée et un mouvement de sortie compense
+ * l'entrée. Voir `reverse_goods_receipt()` pour les garde-fous.
+ */
+export async function cancelReceipt(
+  receiptId: number,
+  reason?: string
+): Promise<ReceiptState> {
+  const user = await getCurrentUser();
+  if (!user) return { status: "error", message: "Session expirée. Reconnectez-vous." };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("reverse_goods_receipt", {
+    p_receipt_id: receiptId,
+    p_operator: user.fullName,
+    p_reason: reason?.trim() || null,
+  });
+
+  if (error) return { status: "error", message: error.message };
+
+  revalidate();
+
+  const result = data as { units: number };
+  return {
+    status: "success",
+    message: `Réception annulée — ${result.units} unités retirées du stock. L'écriture d'origine reste tracée.`,
   };
 }

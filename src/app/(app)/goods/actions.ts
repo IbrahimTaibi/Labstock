@@ -102,11 +102,51 @@ export async function saveLot(
     };
   }
 
-  revalidatePath("/goods");
+  revalidate();
   return {
     status: "success",
     message: id
       ? `Lot « ${lotNumber} » mis à jour.`
       : `Lot « ${lotNumber} » créé.`,
   };
+}
+
+function revalidate() {
+  revalidatePath("/goods");
+  /* Le stock des lots irrigue les sorties, l'inventaire et le tableau de bord. */
+  revalidatePath("/issues");
+  revalidatePath("/inventory");
+  revalidatePath("/products");
+  revalidatePath("/");
+}
+
+/**
+ * Supprime définitivement un lot. Le rang FEFO des autres lots du même
+ * produit se recalcule de lui-même : il est porté par `lots_view`, pas
+ * stocké. Les lots déjà engagés dans un comptage d'inventaire sont
+ * protégés par la contrainte `on delete restrict` — la traçabilité
+ * réglementaire passe avant le ménage.
+ */
+export async function deleteLot(id: number): Promise<SaveLotState> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return { status: "error", message: "Session expirée. Reconnectez-vous." };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("lots").delete().eq("id", id);
+
+  if (error) {
+    if (error.code === "23503") {
+      return {
+        status: "error",
+        message:
+          "Suppression impossible : ce lot figure dans un comptage d'inventaire et doit rester traçable.",
+      };
+    }
+    return { status: "error", message: `Suppression impossible : ${error.message}` };
+  }
+
+  revalidate();
+  return { status: "success", message: "Lot supprimé." };
 }

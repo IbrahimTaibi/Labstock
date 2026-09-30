@@ -1,5 +1,7 @@
 import { createClient } from "./supabase/server";
-import type { Lot, LotStats, ProductOption } from "./types";
+export { lotConformity } from "./lot-conformity";
+
+import type { Lot, LotHistoryEvent, LotStats, ProductOption } from "./types";
 
 export async function getLots(): Promise<Lot[]> {
   const supabase = await createClient();
@@ -43,6 +45,32 @@ export async function getProductOptions(): Promise<ProductOption[]> {
     category: first(row.categories) ?? "—",
     supplier: first(row.suppliers) ?? "—",
   }));
+}
+
+/** Un lot précis, pour la fiche d'historique complet. */
+export async function getLot(id: number): Promise<Lot | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("lots_view")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw new Error(`Chargement du lot : ${error.message}`);
+  return (data as Lot) ?? null;
+}
+
+/** Chronologie recomposée d'un lot : création, réceptions, sorties, comptages. */
+export async function getLotHistory(id: number): Promise<LotHistoryEvent[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("lot_history_view")
+    .select("lot_id, kind, occurred_at, actor, quantity, reference")
+    .eq("lot_id", id)
+    .order("occurred_at", { ascending: false });
+
+  if (error) throw new Error(`Chargement de l'historique : ${error.message}`);
+  return (data ?? []) as LotHistoryEvent[];
 }
 
 const EXPIRY_WARNING_DAYS = 30;

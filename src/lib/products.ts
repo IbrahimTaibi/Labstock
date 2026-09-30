@@ -39,7 +39,8 @@ export async function getProductsWorkspace(): Promise<ProductsWorkspaceData> {
   const joinName = (value: Join) =>
     (Array.isArray(value) ? value[0]?.name : value?.name) ?? "—";
 
-  const today = new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   const products: ProductRow[] = (productsRes.data ?? []).map((p) => {
     const unitPrice = Number(p.unit_price);
@@ -64,10 +65,18 @@ export async function getProductsWorkspace(): Promise<ProductsWorkspaceData> {
     };
   });
 
-  const lots: ProductLot[] = (lotsRes.data ?? []).map((l) => ({
-    ...l,
-    is_expired: l.expiry_date < today,
-  }));
+  const lots: ProductLot[] = (lotsRes.data ?? [])
+    .map((l) => ({
+      ...l,
+      is_expired: l.expiry_date < today,
+    }))
+    /* Les lots consommables précèdent les lots périmés ; parmi eux, FEFO. */
+    .sort(
+      (a, b) =>
+        Number(a.is_expired) - Number(b.is_expired) ||
+        a.expiry_date.localeCompare(b.expiry_date) ||
+        a.id - b.id
+    );
 
   return {
     products,

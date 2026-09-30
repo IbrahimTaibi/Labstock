@@ -42,3 +42,9 @@ next-env.d.ts
 
 # le gabarit ne contient aucun secret
 !.env.example
+
+# scratch d'outillage local
+/.agents/
+/.aider-desk/
+/skills-lock.json
+/supabase/.temp/

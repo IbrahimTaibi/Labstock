@@ -4,16 +4,26 @@ import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
 
 /** Barre d'actions du document : absente de l'impression elle-même. */
-export function PrintToolbar({ backHref }: { backHref: string }) {
+export function PrintToolbar({
+  backHref,
+  backLabel = "Retour aux factures",
+  children,
+}: {
+  backHref: string;
+  backLabel?: string;
+  children?: React.ReactNode;
+}) {
   return (
-    <div className="mx-auto mb-4 flex w-full max-w-[820px] items-center justify-between print:hidden">
+    <div className="mx-auto mb-4 flex w-full max-w-[820px] items-center justify-between gap-3 print:hidden">
       <Link
         href={backHref}
         className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-secondary)] hover:underline"
       >
         <ArrowLeft size={13} strokeWidth={2.2} aria-hidden />
-        Retour aux factures
+        {backLabel}
       </Link>
+
+      {children}
 
       <button
         type="button"

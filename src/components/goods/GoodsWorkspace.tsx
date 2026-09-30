@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { NEW_LOT_EVENT } from "./GoodsHeaderActions";
 import { LotDetails } from "./LotDetails";
 import { LotForm } from "./LotForm";
 import { LotTable } from "./LotTable";
@@ -22,16 +23,36 @@ export function GoodsWorkspace({
   const selected = lots.find((lot) => lot.id === selectedId) ?? null;
   const editing = lots.find((lot) => lot.id === editingId) ?? null;
 
-  function startEdit(lot: Lot) {
-    setEditingId(lot.id);
+  /* « Nouvelle marchandise » depuis l'en-tête : on repart d'un formulaire
+     vierge et on y amène l'utilisateur. */
+  useEffect(() => {
+    function onNewLot() {
+      setEditingId(null);
+      setSelectedId(null);
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    window.addEventListener(NEW_LOT_EVENT, onNewLot);
+    return () => window.removeEventListener(NEW_LOT_EVENT, onNewLot);
+  }, []);
+
+  /* §7.1 : sélectionner une ligne alimente en même temps la fiche de droite
+     et le formulaire du haut, qui bascule en modification. */
+  function select(lot: Lot) {
     setSelectedId(lot.id);
+    setEditingId(lot.id);
+  }
+
+  /* Le bouton crayon fait la même chose, en amenant l'œil au formulaire —
+     remonter la page à chaque clic de ligne serait insupportable. */
+  function startEdit(lot: Lot) {
+    select(lot);
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   return (
     <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_310px]">
       <div className="flex min-w-0 flex-col gap-3">
-        <div ref={formRef}>
+        <div ref={formRef} id="lot-form">
           <LotForm
             lots={lots}
             products={products}
@@ -43,7 +64,7 @@ export function GoodsWorkspace({
         <LotTable
           lots={lots}
           selectedId={selectedId}
-          onSelect={(lot) => setSelectedId(lot.id)}
+          onSelect={select}
           onEdit={startEdit}
         />
       </div>

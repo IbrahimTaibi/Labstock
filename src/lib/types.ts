@@ -357,6 +357,30 @@ export type LotStats = {
   expired: number;
 };
 
+/** Conformité d'un lot, déduite de sa fiche — jamais saisie à la main. */
+export type LotConformity = {
+  conforme: boolean;
+  /** Motifs de non-conformité, vide si le lot est conforme. */
+  reasons: string[];
+};
+
+export type LotHistoryKind =
+  | "created"
+  | "updated"
+  | "receipt"
+  | "issue"
+  | "count";
+
+export type LotHistoryEvent = {
+  lot_id: number;
+  kind: LotHistoryKind;
+  occurred_at: string;
+  actor: string | null;
+  /** Variation de stock portée par l'événement ; null si sans effet. */
+  quantity: number | null;
+  reference: string | null;
+};
+
 export type IssueMode = "automatic" | "manual";
 
 export type PrescribedAnalysis = {
@@ -403,12 +427,52 @@ export type IssueHistoryEntry = {
   total_quantity: number;
 };
 
+/** Connecteur LIS déclaré (§3.2). Plusieurs sources peuvent coexister. */
+export type LisSource = {
+  id: number;
+  slug: string;
+  name: string;
+  active: boolean;
+  last_event_at: string | null;
+};
+
+export type LisEventStatus =
+  | "accepted"
+  | "duplicate"
+  | "unknown_source"
+  | "invalid_signature"
+  | "unknown_analysis"
+  | "malformed";
+
+/** Ligne du journal d'appels entrants — pièce d'audit du flux LIS (§9.2). */
+export type LisWebhookEvent = {
+  id: number;
+  slug: string | null;
+  prescription_id: string | null;
+  status: LisEventStatus;
+  detail: string | null;
+  analyses_created: number;
+  received_at: string;
+};
+
+/** Coefficient de consommation, à plat pour la page de consultation (§7.2). */
+export type AnalysisCoefficient = {
+  analysis_code: string;
+  analysis_name: string;
+  section: string;
+  product_name: string;
+  reference: string | null;
+  coefficient: number;
+};
+
 export type IssueWorkspaceData = {
   analyses: PrescribedAnalysis[];
   consumables: PendingConsumable[];
   coefficients: CoefficientDetail[];
   history: IssueHistoryEntry[];
   lastSync: string | null;
+  sources: LisSource[];
+  events: LisWebhookEvent[];
 };
 
 export type DeliveryStatus = "pending" | "partial" | "received";
@@ -436,15 +500,63 @@ export type OrderLine = {
   unit_price: number;
   packaging: string | null;
   delivery_status: DeliveryStatus;
+  /** Lots consommables du produit, ordonnés par ancienneté (FEFO). */
+  fefoLots: { lot_number: string; expiry_date: string }[];
 };
 
 export type ReceiptHistoryEntry = {
+  /** Identifiant de la ligne de réception. */
   id: number;
+  /** En-tête de réception — cible d'une éventuelle contre-passation. */
+  receipt_id: number;
   received_at: string;
   operator: string;
   quantity: number;
+  unit_price: number;
   reference: string;
+  product_name: string;
   lot_number: string | null;
+  /** Permet d'imprimer l'étiquette via le module Marchandises. */
+  lot_id: number | null;
+  order_number: string;
+  /** Non nul si la réception a été contre-passée. */
+  reversed_at: string | null;
+  reversed_by: string | null;
+  reversal_reason: string | null;
+};
+
+/** Bon de commande imprimable (§3 : consultation du BC d'origine). */
+export type PurchaseOrderDocument = {
+  id: number;
+  number: string;
+  ordered_at: string;
+  status: DeliveryStatus;
+  supplier: {
+    name: string;
+    contact_name: string | null;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+  };
+  lines: {
+    id: number;
+    reference: string;
+    product_name: string;
+    packaging: string | null;
+    quantity_ordered: number;
+    quantity_received: number;
+    unit_price: number;
+  }[];
+};
+
+/** Cumuls d'un bon de commande, annulations déduites. */
+export type OrderTotals = {
+  receivedValue: number;
+  unitsReceived: number;
+  lotsCreated: number;
+  receiptCount: number;
+  /** Dernière écriture de stock sur ce bon de commande. */
+  lastReceiptAt: string | null;
 };
 
 export type ReceiptsWorkspaceData = {
@@ -452,6 +564,89 @@ export type ReceiptsWorkspaceData = {
   selectedOrder: PurchaseOrderOption | null;
   lines: OrderLine[];
   history: ReceiptHistoryEntry[];
+  totals: OrderTotals;
+};
+
+/* ---- Inventaire analytique ---- */
+
+export type AnalyticsStatus = "sain" | "alerte" | "rupture" | "surstock";
+
+export type AnalyticsRow = {
+  product_id: number;
+  reference: string;
+  product_name: string;
+  category: string;
+  supplier: string;
+  packaging: string | null;
+  stock_initial: number;
+  entries: number;
+  exits: number;
+  stock_final: number;
+  stock_average: number;
+  cmj_short: number;
+  cmj_long: number;
+  /** null si l'article n'a aucune sortie sur la période : autonomie indéfinie. */
+  coverage_days: number | null;
+  rotation: number | null;
+  cump: number;
+  stock_value: number;
+  safety_stock: number;
+  alert_stock: number;
+  min_stock: number;
+  max_stock: number;
+  status: AnalyticsStatus;
+  order_quantity: number;
+  order_value: number;
+};
+
+export type AnalyticsFilters = {
+  coverageMin: number | null;
+  coverageMax: number | null;
+  status: AnalyticsStatus | "all";
+  category: string;
+  supplier: string;
+};
+
+export type AnalyticsTotals = {
+  totalValue: number;
+  directValue: number;
+  safetyValue: number;
+  alertValue: number;
+  articles: number;
+  catalogueArticles: number;
+  byStatus: Record<AnalyticsStatus, number>;
+  byCategory: { category: string; value: number }[];
+};
+
+export type AnalyticsWorkspaceData = {
+  rows: AnalyticsRow[];
+  categories: string[];
+  suppliers: string[];
+  exits: { day: string; quantity: number }[];
+  catalogueArticles: number;
+};
+
+/** Lot affiché dans la fiche article (§8.5). */
+export type ArticleLot = {
+  id: number;
+  lot_number: string;
+  expiry_date: string;
+  current_qty: number;
+  location: string | null;
+  is_expired: boolean;
+};
+
+/** Mouvement affiché dans l'onglet « Mouvements » (§8.6). */
+export type ArticleMovement = {
+  id: number;
+  type: "in" | "out";
+  quantity: number;
+  moved_at: string;
+};
+
+export type ArticleDetail = {
+  lots: ArticleLot[];
+  movements: ArticleMovement[];
 };
 
 export type InventoryScope = "full" | "category";

@@ -1,3 +1,4 @@
+import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const CONTROL =
@@ -7,18 +8,29 @@ export function Field({
   label,
   required,
   hint,
+  locked,
   children,
 }: {
   label: string;
   required?: boolean;
   hint?: string;
+  /** Champ repris d'une autre source : le cadenas dit qu'il ne se saisit pas ici. */
+  locked?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10px] font-medium text-[var(--text-secondary)]">
+      <span className="mb-1 flex items-center gap-1 text-[10px] font-medium text-[var(--text-secondary)]">
         {label}
         {required ? <span style={{ color: "var(--critical)" }}> *</span> : null}
+        {locked ? (
+          <Lock
+            size={9}
+            strokeWidth={2.4}
+            className="text-[var(--text-muted)]"
+            aria-label="Champ non modifiable ici"
+          />
+        ) : null}
       </span>
       {children}
       {hint ? (

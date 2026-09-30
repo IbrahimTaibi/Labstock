@@ -4,6 +4,7 @@ import { useActionState, useMemo, useState } from "react";
 import { Info, RotateCcw, Save, X } from "lucide-react";
 import { saveLot, type SaveLotState } from "@/app/(app)/goods/actions";
 import { Field, Input, ReadOnlyValue, Select } from "./Field";
+import { FefoRank } from "./FefoBadge";
 import type { Lot, ProductOption } from "@/lib/types";
 
 const EMPTY: SaveLotState = { status: "idle", message: "" };
@@ -145,7 +146,7 @@ export function LotForm({
           />
         </Field>
 
-        <Field label="Stock initial" required>
+        <Field label="Stock initial" required hint="Exprimé en unités">
           <Input
             name="initial_qty"
             type="number"
@@ -165,6 +166,27 @@ export function LotForm({
               : isActive
                 ? "Actif (prioritaire FEFO)"
                 : "Inactif"}
+          </ReadOnlyValue>
+        </Field>
+
+        <Field label="Priorité FEFO">
+          <ReadOnlyValue>
+            {preview ? (
+              <span className="flex items-center gap-2">
+                <FefoRank rank={preview.rank} />
+                <span className="text-[10px] font-normal text-[var(--text-muted)]">
+                  {preview.rank === null
+                    ? "hors rotation"
+                    : preview.rank === 1
+                      ? "à sortir en premier"
+                      : `après ${preview.rank - 1} autre${
+                          preview.rank > 2 ? "s" : ""
+                        } lot${preview.rank > 2 ? "s" : ""}`}
+                </span>
+              </span>
+            ) : (
+              "—"
+            )}
           </ReadOnlyValue>
         </Field>
 

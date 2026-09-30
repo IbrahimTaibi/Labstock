@@ -3,6 +3,7 @@
 import { getCurrentUser } from "@/lib/auth";
 import { csvFilename, csvNumber, toCsv } from "@/lib/csv";
 import { getInvoicesWorkspace } from "@/lib/invoices";
+import { lotConformity } from "@/lib/lot-conformity";
 import { getLots } from "@/lib/lots";
 import { getProductsWorkspace } from "@/lib/products";
 import { getSuppliersWorkspace } from "@/lib/suppliers";
@@ -148,33 +149,46 @@ export async function exportCsv(kind: ExportKind): Promise<ExportResult> {
             [
               "Numéro de lot",
               "Produit",
+              "Référence interne",
               "Catégorie",
               "Fournisseur",
               "Péremption",
               "Jours restants",
               "Quantité initiale",
               "Quantité restante",
+              "Prix HT",
               "Prix unitaire",
               "Rang FEFO",
+              "Statut FEFO",
               "Périmé",
+              "Conformité",
+              "Motifs de non-conformité",
               "Conditionnement",
               "Fabricant",
             ],
-            ...lots.map((l) => [
-              l.lot_number,
-              l.product_name,
-              l.category,
-              l.supplier,
-              l.expiry_date,
-              l.days_left,
-              l.initial_qty,
-              l.current_qty,
-              csvNumber(l.unit_price),
-              l.fefo_rank ?? "",
-              l.is_expired ? "Oui" : "Non",
-              l.packaging ?? "",
-              l.manufacturer ?? "",
-            ]),
+            ...lots.map((l) => {
+              const { conforme, reasons } = lotConformity(l);
+              return [
+                l.lot_number,
+                l.product_name,
+                l.internal_ref ?? "",
+                l.category,
+                l.supplier,
+                l.expiry_date,
+                l.days_left,
+                l.initial_qty,
+                l.current_qty,
+                l.price_ht === null ? "" : csvNumber(l.price_ht),
+                csvNumber(l.unit_price),
+                l.fefo_rank ?? "",
+                l.fefo_rank === 1 ? "Actif" : "Inactif",
+                l.is_expired ? "Oui" : "Non",
+                conforme ? "Conforme" : "Non conforme",
+                reasons.join(" ; "),
+                l.packaging ?? "",
+                l.manufacturer ?? "",
+              ];
+            }),
           ]),
         };
       }

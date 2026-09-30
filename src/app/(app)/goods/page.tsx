@@ -1,13 +1,11 @@
-import {
-  Boxes,
-  CheckCircle2,
-  Clock,
-  ScanBarcode,
-  XCircle,
-} from "lucide-react";
+import { Boxes, CalendarX, CheckCircle2, Clock, XCircle } from "lucide-react";
 
 import { ExportCsvButton } from "@/components/ExportCsvButton";
 import { PageHeader } from "@/components/shell/PageHeader";
+import {
+  BarcodeMenu,
+  NewLotButton,
+} from "@/components/goods/GoodsHeaderActions";
 import { GoodsWorkspace } from "@/components/goods/GoodsWorkspace";
 import { computeLotStats, getLots, getProductOptions } from "@/lib/lots";
 import { formatInt } from "@/lib/utils";
@@ -25,13 +23,8 @@ export default async function GoodsPage() {
         subtitle="Ajouter, modifier et suivre les lots de marchandises en stock"
         actions={
           <>
-            <button
-              type="button"
-              className="card flex items-center gap-2 px-3 py-2.5 text-[11px] font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--page)]"
-            >
-              <ScanBarcode size={14} aria-hidden />
-              Imprimer codes-barres
-            </button>
+            <NewLotButton />
+            <BarcodeMenu />
             <ExportCsvButton kind="lots" />
           </>
         }
@@ -61,19 +54,21 @@ export default async function GoodsPage() {
           color="var(--serious)"
           icon={<Clock size={16} strokeWidth={2.2} />}
         />
+        {/* Pas de purge automatique : un lot périmé reste au registre, sorti
+            de la rotation FEFO. La traçabilité ISO 15189 l'exige. */}
         <StatTile
           label="Lots expirés"
           value={stats.expired}
-          note="À retirer du stock"
+          note="Conservés pour traçabilité"
           color="var(--critical)"
-          icon={<XCircle size={16} strokeWidth={2.2} />}
+          icon={<CalendarX size={16} strokeWidth={2.2} />}
         />
         <StatTile
           label="Lots inactifs (FEFO)"
           value={stats.inactive}
           note="Non prioritaires"
           color="var(--text-muted)"
-          icon={<Boxes size={16} strokeWidth={2.2} />}
+          icon={<XCircle size={16} strokeWidth={2.2} />}
         />
       </div>
     </main>

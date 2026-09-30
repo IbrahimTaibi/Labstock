@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ArrowLeftRight,
+  BarChart3,
   Boxes,
   Building2,
   ClipboardCheck,
@@ -43,6 +44,7 @@ const NAV: NavGroup[] = [
       { label: "Réceptions", href: "/receipts", icon: Truck },
       { label: "Sorties de stock", href: "/issues", icon: ArrowLeftRight },
       { label: "Inventaire", href: "/inventory", icon: ClipboardCheck },
+      { label: "Inventaire analytique", href: "/analytics", icon: BarChart3 },
       { label: "Produits", href: "/products", icon: Package },
     ],
   },

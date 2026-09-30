@@ -1,9 +1,9 @@
 "use client";
 
-import { useTransition } from "react";
-import { Info, Plug, RefreshCw } from "lucide-react";
+import { useState, useTransition } from "react";
+import { CheckCircle2, Info, Plug, RefreshCw } from "lucide-react";
 import { syncOrders } from "@/app/(app)/issues/actions";
-import type { IssueMode } from "@/lib/types";
+import type { IssueMode, LisSource } from "@/lib/types";
 import { cn, formatDateTime } from "@/lib/utils";
 
 const MODES: Array<{
@@ -32,14 +32,24 @@ export function SourceAndMode({
   mode,
   onModeChange,
   lastSync,
+  sources,
   onMessage,
 }: {
   mode: IssueMode;
   onModeChange: (mode: IssueMode) => void;
   lastSync: string | null;
+  sources: LisSource[];
   onMessage: (message: string, ok: boolean) => void;
 }) {
   const [pending, start] = useTransition();
+  const [sourceId, setSourceId] = useState<number | null>(
+    sources.find((source) => source.active)?.id ?? sources[0]?.id ?? null
+  );
+
+  const source = sources.find((item) => item.id === sourceId) ?? null;
+  /* Sans connecteur déclaré, l'import reste celui du simulateur : le dire
+     vaut mieux qu'afficher un « Connecté » qui ne repose sur rien. */
+  const connected = Boolean(source?.active);
 
   function handleSync() {
     start(async () => {
@@ -99,23 +109,46 @@ export function SourceAndMode({
           <span className="mb-1 block text-[10px] font-medium text-[var(--text-secondary)]">
             Source externe
           </span>
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--page)] px-2.5 py-2">
-            <span className="flex min-w-0 items-center gap-2 text-[12px] font-medium">
-              <Plug size={13} className="shrink-0 text-[var(--text-muted)]" aria-hidden />
-              <span className="truncate">Logiciel de laboratoire (LIS)</span>
-            </span>
-            {/* Connecteur de démonstration : l'import est simulé côté base. */}
-            <span
-              className="shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[9px] font-semibold"
-              style={{
-                color: "var(--serious)",
-                background: "color-mix(in srgb, var(--serious) 14%, transparent)",
-              }}
-              title="Aucun LIS réel n'est branché : l'import est simulé."
-            >
-              Simulé
-            </span>
-          </div>
+
+          {sources.length > 0 ? (
+            <div className="flex items-center gap-2">
+              <select
+                value={sourceId ?? ""}
+                onChange={(event) => setSourceId(Number(event.target.value))}
+                aria-label="Connecteur LIS"
+                className="min-w-0 flex-1 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2.5 py-2 text-[12px] text-[var(--text-primary)] outline-none focus:border-[var(--series-1)]"
+              >
+                {sources.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                    {item.active ? "" : " (inactif)"}
+                  </option>
+                ))}
+              </select>
+              <StatusDot connected={connected} lastEventAt={source?.last_event_at ?? null} />
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border)] bg-[var(--page)] px-2.5 py-2">
+              <span className="flex min-w-0 items-center gap-2 text-[12px] font-medium">
+                <Plug
+                  size={13}
+                  className="shrink-0 text-[var(--text-muted)]"
+                  aria-hidden
+                />
+                <span className="truncate">Logiciel de laboratoire (LIS)</span>
+              </span>
+              <span
+                className="shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[9px] font-semibold"
+                style={{
+                  color: "var(--serious)",
+                  background: "color-mix(in srgb, var(--serious) 14%, transparent)",
+                }}
+                title="Aucun connecteur LIS déclaré : l'import est simulé."
+              >
+                Simulé
+              </span>
+            </div>
+          )}
         </div>
 
         <fieldset>
@@ -168,6 +201,51 @@ export function SourceAndMode({
           </div>
         </fieldset>
       </div>
+
+      {/* §3.4 — rappel de ce que le mode retenu implique concrètement. */}
+      <p
+        className="mt-3 flex items-start gap-2 rounded-lg px-3 py-2 text-[10px] font-medium leading-relaxed"
+        style={{
+          color: mode === "automatic" ? "var(--good)" : "var(--series-1)",
+          background: `color-mix(in srgb, ${
+            mode === "automatic" ? "var(--good)" : "var(--series-1)"
+          } 10%, transparent)`,
+        }}
+      >
+        <CheckCircle2 size={13} strokeWidth={2.4} className="mt-px shrink-0" aria-hidden />
+        {mode === "automatic"
+          ? "En mode automatique, les quantités sont calculées depuis les coefficients et ne sont pas modifiables : la déduction porte exactement sur le besoin calculé."
+          : "En mode manuel, les quantités proposées restent modifiables dans le tableau ci-dessous ; aucune déduction n'a lieu avant votre validation."}
+      </p>
     </section>
+  );
+}
+
+/** Pastille d'état du connecteur (§3.1). */
+function StatusDot({
+  connected,
+  lastEventAt,
+}: {
+  connected: boolean;
+  lastEventAt: string | null;
+}) {
+  const color = connected ? "var(--good)" : "var(--text-muted)";
+  return (
+    <span
+      className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded px-1.5 py-1 text-[9px] font-semibold"
+      style={{ color, background: `color-mix(in srgb, ${color} 12%, transparent)` }}
+      title={
+        lastEventAt
+          ? `Dernier évènement reçu : ${formatDateTime(lastEventAt)}`
+          : "Aucun évènement reçu de ce connecteur"
+      }
+    >
+      <span
+        className="h-1.5 w-1.5 rounded-full"
+        style={{ background: color }}
+        aria-hidden
+      />
+      {connected ? "Connecté" : "Inactif"}
+    </span>
   );
 }

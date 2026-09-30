@@ -53,6 +53,7 @@ export function ConsumablesTable({
             <table className="w-full min-w-[940px] border-collapse text-[11px]">
               <thead>
                 <tr>
+                  <Th align="right">#</Th>
                   <Th>Consommable</Th>
                   <Th>Référence</Th>
                   <Th>Lot (FEFO)</Th>
@@ -66,13 +67,16 @@ export function ConsumablesTable({
                 </tr>
               </thead>
               <tbody>
-                {consumables.map((row) => {
+                {consumables.map((row, index) => {
                   const quantity = effective(row);
                   const remaining = row.stock_available - quantity;
                   const ok = remaining >= 0;
 
                   return (
                     <tr key={row.product_id}>
+                      <Td align="right" className="text-[var(--text-muted)]">
+                        {index + 1}
+                      </Td>
                       <Td>
                         <span className="block max-w-[190px] truncate font-medium">
                           {row.product_name}

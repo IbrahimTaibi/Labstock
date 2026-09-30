@@ -1,7 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_ROUTES = ["/login"];
+/* `/api/webhooks` est public au sens de la session : ces routes n'ont pas
+   d'utilisateur connecté et portent leur propre authentification (signature
+   HMAC vérifiée en base). Les rediriger vers /login renverrait au LIS une
+   page HTML de connexion avec un code 307, qu'il interpréterait comme une
+   livraison réussie. */
+const PUBLIC_ROUTES = ["/login", "/api/webhooks"];
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });

@@ -1,4 +1,5 @@
-import { History, Info, Sigma } from "lucide-react";
+import Link from "next/link";
+import { FlaskConical, History, Info, Sigma } from "lucide-react";
 import type {
   CoefficientDetail,
   IssueHistoryEntry,
@@ -125,6 +126,14 @@ export function IssueSummary({
             ))}
           </tbody>
         </table>
+
+        <Link
+          href="/issues/coefficients"
+          className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] px-2 py-2 text-[10px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--page)]"
+        >
+          <FlaskConical size={12} aria-hidden />
+          Voir tous les coefficients
+        </Link>
       </aside>
 
       <aside className="card p-4">
@@ -148,13 +157,21 @@ export function IssueSummary({
                   {formatDateTime(entry.issued_at)}
                 </span>
                 <ModeTag mode={entry.mode} />
-                <span className="tnum shrink-0 font-medium text-[var(--text-primary)]">
-                  {formatInt(entry.total_quantity)} u.
+                <span className="tnum shrink-0 text-right font-medium text-[var(--text-primary)]">
+                  {formatInt(entry.total_references)} réf. · {formatInt(entry.total_quantity)} u.
                 </span>
               </li>
             ))}
           </ul>
         )}
+
+        <Link
+          href="/issues/history"
+          className="mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] px-2 py-2 text-[10px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--page)]"
+        >
+          <History size={12} aria-hidden />
+          Voir tout l&apos;historique
+        </Link>
       </aside>
     </div>
   );

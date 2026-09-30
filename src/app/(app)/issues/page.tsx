@@ -1,5 +1,6 @@
 import { CalendarClock, Printer } from "lucide-react";
 import { PageHeader } from "@/components/shell/PageHeader";
+import { LiveClock } from "@/components/receipts/ReceiptHeaderInfo";
 import { IssuesWorkspace } from "@/components/issues/IssuesWorkspace";
 import { getIssueWorkspace } from "@/lib/issues";
 import { formatDateTime } from "@/lib/utils";
@@ -31,13 +32,16 @@ export default async function IssuesPage() {
                 </div>
               </div>
             </div>
-            <button
-              type="button"
+            <LiveClock />
+            <a
+              href="/issues/preview"
+              target="_blank"
+              rel="noopener"
               className="card flex items-center gap-2 px-3 py-2.5 text-[11px] font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--page)]"
             >
               <Printer size={14} aria-hidden />
               Aperçu avant impression
-            </button>
+            </a>
           </>
         }
       />

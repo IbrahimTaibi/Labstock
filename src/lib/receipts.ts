@@ -148,9 +148,14 @@ export async function getReceiptsWorkspace(
 ): Promise<ReceiptsWorkspaceData> {
   const supabase = await createClient();
 
+  /* Seules les commandes engagées auprès du fournisseur se réceptionnent :
+     un panier en préparation n'a encore rien commandé, et une commande
+     annulée ne livrera rien. La base refuse de toute façon ces réceptions ;
+     on évite simplement de les proposer. */
   const { data: orderRows, error: orderError } = await supabase
     .from("purchase_orders")
     .select("id, number, ordered_at, status, suppliers(name)")
+    .in("lifecycle", ["approved", "sent"])
     .order("ordered_at", { ascending: false });
 
   if (orderError) {

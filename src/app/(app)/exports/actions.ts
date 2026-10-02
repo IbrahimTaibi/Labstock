@@ -2,13 +2,22 @@
 
 import { getCurrentUser } from "@/lib/auth";
 import { csvFilename, csvNumber, toCsv } from "@/lib/csv";
+import { getDebtsWorkspace } from "@/lib/debts";
 import { getInvoicesWorkspace } from "@/lib/invoices";
 import { lotConformity } from "@/lib/lot-conformity";
 import { getLots } from "@/lib/lots";
 import { getProductsWorkspace } from "@/lib/products";
+import { getRequestsWorkspace } from "@/lib/purchase-requests";
 import { getSuppliersWorkspace } from "@/lib/suppliers";
 
-export type ExportKind = "products" | "invoices" | "suppliers" | "lots";
+export type ExportKind =
+  | "products"
+  | "invoices"
+  | "suppliers"
+  | "lots"
+  | "debts"
+  | "payments"
+  | "requests";
 
 export type ExportResult =
   | { status: "success"; filename: string; content: string }
@@ -24,6 +33,40 @@ const INVOICE_STATUS = {
   paid: "Payée",
   pending: "En attente",
   overdue: "En retard",
+} as const;
+
+/* Libellés des tranches d'ancienneté (§7.1). Dupliqués ici plutôt
+   qu'importés de DebtBadge : ce module est un Server Action, et ce composant
+   est client. */
+const DEBT_STATUS = {
+  paid: "Payée",
+  not_due: "Non échue",
+  no_due_date: "Sans échéance",
+  late_1_30: "Échue [1;30]",
+  late_31_60: "Échue [31;60]",
+  late_61_90: "Échue [61;90]",
+  late_90_plus: "Échue > 90 jours",
+} as const;
+
+const PAYMENT_METHOD = {
+  transfer: "Virement",
+  check: "Chèque",
+  cash: "Espèces",
+  card: "Carte",
+  other: "Autre",
+} as const;
+
+const REQUEST_STATUS = {
+  pending: "En attente",
+  approved: "Validée",
+  converted: "Convertie en BC",
+  rejected: "Refusée",
+} as const;
+
+const REQUEST_PRIORITY = {
+  critical: "Critique",
+  urgent: "Urgente",
+  normal: "Normale",
 } as const;
 
 /**
@@ -95,6 +138,114 @@ export async function exportCsv(kind: ExportKind): Promise<ExportResult> {
               csvNumber(f.amount),
               INVOICE_STATUS[f.status],
               f.days_late || "",
+            ]),
+          ]),
+        };
+      }
+
+      case "debts": {
+        const { debts } = await getDebtsWorkspace();
+        return {
+          status: "success",
+          filename: csvFilename("dettes-fournisseurs"),
+          content: toCsv([
+            [
+              "Numéro",
+              "Type",
+              "Fournisseur",
+              "Date facture",
+              "Catégorie",
+              "Délai (j)",
+              "Échéance",
+              "À payer",
+              "Payé",
+              "Solde",
+              "Retard (j)",
+              "Statut",
+            ],
+            ...debts.map((d) => [
+              d.number,
+              d.source === "supplier" ? "Marchandises" : "Sous-traitance",
+              d.creditor,
+              d.issue_date,
+              d.expense_category ?? "",
+              d.payment_terms_days ?? "",
+              d.due_date ?? "",
+              csvNumber(d.amount_due),
+              csvNumber(d.amount_paid),
+              csvNumber(d.balance),
+              d.days_late ?? "",
+              DEBT_STATUS[d.status],
+            ]),
+          ]),
+        };
+      }
+
+      case "payments": {
+        const { payments } = await getDebtsWorkspace();
+        return {
+          status: "success",
+          filename: csvFilename("reglements"),
+          content: toCsv([
+            [
+              "Date règlement",
+              "N° Facture",
+              "Fournisseur",
+              "Mode",
+              "Référence",
+              "Montant",
+              "Annulé le",
+              "Annulé par",
+              "Motif d'annulation",
+            ],
+            ...payments.map((p) => [
+              p.paid_at,
+              p.invoice_number,
+              p.creditor,
+              PAYMENT_METHOD[p.method],
+              p.reference ?? "",
+              csvNumber(p.amount),
+              p.reversed_at ?? "",
+              p.reversed_by ?? "",
+              p.reversal_reason ?? "",
+            ]),
+          ]),
+        };
+      }
+
+      case "requests": {
+        const { requests } = await getRequestsWorkspace();
+        return {
+          status: "success",
+          filename: csvFilename("demandes-achat"),
+          content: toCsv([
+            [
+              "Date DA",
+              "N° DA",
+              "Référence",
+              "Désignation",
+              "Fournisseur",
+              "Qté demandée",
+              "Qté validée",
+              "Priorité",
+              "Statut",
+              "Demandeur",
+              "Validé par",
+              "Bon de commande",
+            ],
+            ...requests.map((r) => [
+              r.requested_at,
+              r.number,
+              r.reference ?? "",
+              r.designation,
+              r.supplier ?? "",
+              r.quantity_requested,
+              r.quantity_approved ?? "",
+              REQUEST_PRIORITY[r.priority],
+              REQUEST_STATUS[r.status],
+              r.requester,
+              r.validated_by ?? "",
+              r.purchase_order_number ?? "",
             ]),
           ]),
         };

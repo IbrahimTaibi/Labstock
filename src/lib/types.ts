@@ -218,6 +218,241 @@ export type CategoryStock = {
 
 export type InvoiceStatus = "paid" | "pending" | "overdue";
 
+/* ------------------------------------------------------------------ Dettes */
+
+/** Tranches d'ancienneté : miroir exact de public.debt_ageing_bucket(). */
+export type DebtStatus =
+  | "paid"
+  | "not_due"
+  | "no_due_date"
+  | "late_1_30"
+  | "late_31_60"
+  | "late_61_90"
+  | "late_90_plus";
+
+export type DebtSource = "supplier" | "subcontractor";
+
+export type PaymentMethod = "transfer" | "check" | "cash" | "card" | "other";
+
+export type DebtRow = {
+  source: DebtSource;
+  invoice_id: number;
+  number: string;
+  external_number: string | null;
+  creditor: string;
+  creditor_id: number;
+  issue_date: string;
+  due_date: string | null;
+  payment_terms_days: number | null;
+  expense_category: string | null;
+  amount_due: number;
+  amount_paid: number;
+  balance: number;
+  days_late: number | null;
+  status: DebtStatus;
+};
+
+export type PaymentRow = {
+  payment_id: number;
+  paid_at: string;
+  source: DebtSource;
+  invoice_id: number;
+  invoice_number: string;
+  creditor: string;
+  method: PaymentMethod;
+  reference: string | null;
+  amount: number;
+  note: string | null;
+  reversed_at: string | null;
+  reversed_by: string | null;
+  reversal_reason: string | null;
+};
+
+/** Les 5 cartes KPI, partagées par les deux écrans du parcours. */
+export type DebtTotals = {
+  count: number;
+  amount_due: number;
+  amount_paid: number;
+  balance: number;
+  overdue_count: number;
+  overdue_over_30: number;
+};
+
+export type DebtAgeingSlice = {
+  status: DebtStatus;
+  count: number;
+  balance: number;
+};
+
+export type DebtCreditorTotal = {
+  creditor: string;
+  balance: number;
+  invoices: number;
+};
+
+export type DebtsWorkspaceData = {
+  debts: DebtRow[];
+  payments: PaymentRow[];
+  totals: DebtTotals;
+  ageing: DebtAgeingSlice[];
+  topCreditors: DebtCreditorTotal[];
+};
+
+/* -------------------------------------------------- Bons de commande (B.C.) */
+
+/** Cycle de vie fournisseur — distinct de `DeliveryStatus` (réception). */
+export type OrderLifecycle = "draft" | "approved" | "sent" | "cancelled";
+
+export type PurchaseOrderRow = {
+  id: number;
+  number: string;
+  supplier_id: number;
+  supplier: string | null;
+  order_date: string;
+  lifecycle: OrderLifecycle;
+  status: DeliveryStatus;
+  delivery_days: number | null;
+  payment_method: string | null;
+  currency: string;
+  validated_at: string | null;
+  validated_by: string | null;
+  sent_at: string | null;
+  sent_by: string | null;
+  cancelled_at: string | null;
+  cancellation_reason: string | null;
+  line_count: number;
+  total_quantity: number;
+  total_ht: number;
+  total_vat: number;
+  total_ttc: number;
+};
+
+export type OrderCartLine = {
+  id: number;
+  product_id: number;
+  product_name: string;
+  reference: string | null;
+  request_id: number | null;
+  request_number: string | null;
+  requester: string | null;
+  quantity_ordered: number;
+  quantity_received: number;
+  unit_price: number;
+  vat_rate: number;
+  line_total_ht: number;
+  line_vat: number;
+};
+
+/** D.A. validée et libre, prête à rejoindre un panier (§5). */
+export type AvailableRequest = {
+  id: number;
+  number: string;
+  requested_at: string;
+  product_id: number;
+  reference: string | null;
+  designation: string;
+  supplier_id: number;
+  quantity: number;
+  requester: string;
+};
+
+export type OrdersWorkspaceData = {
+  current: PurchaseOrderRow | null;
+  lines: OrderCartLine[];
+  available: AvailableRequest[];
+  recent: PurchaseOrderRow[];
+  suppliers: { id: number; name: string }[];
+  products: {
+    id: number;
+    name: string;
+    reference: string | null;
+    supplier_id: number;
+    unit_price: number;
+  }[];
+};
+
+/* ------------------------------------------------- Demandes d'achat (D.A.) */
+
+export type RequestStatus = "pending" | "approved" | "rejected" | "converted";
+
+export type RequestPriority = "critical" | "urgent" | "normal";
+
+export type RequestEventKind =
+  | "created"
+  | "approved"
+  | "rejected"
+  | "converted"
+  | "updated";
+
+export type PurchaseRequestRow = {
+  id: number;
+  number: string;
+  requested_at: string;
+  product_id: number | null;
+  reference: string | null;
+  designation: string;
+  supplier_id: number | null;
+  supplier: string | null;
+  quantity_requested: number;
+  quantity_approved: number | null;
+  estimated_unit_price: number | null;
+  priority: RequestPriority;
+  status: RequestStatus;
+  requester: string;
+  comment: string | null;
+  validated_at: string | null;
+  validated_by: string | null;
+  rejection_reason: string | null;
+  purchase_order_id: number | null;
+  purchase_order_number: string | null;
+};
+
+export type PurchaseRequestEvent = {
+  id: number;
+  request_id: number;
+  kind: RequestEventKind;
+  occurred_at: string;
+  actor: string | null;
+  detail: string | null;
+};
+
+/** Les 6 cartes de §3. */
+export type RequestTotals = {
+  total: number;
+  pending: number;
+  approved: number;
+  converted: number;
+  rejected: number;
+  critical: number;
+  this_month: number;
+};
+
+export type RequestSlice<T extends string> = {
+  key: T;
+  count: number;
+};
+
+export type RequestSupplierTotal = {
+  supplier: string;
+  count: number;
+};
+
+export type RequestsWorkspaceData = {
+  requests: PurchaseRequestRow[];
+  events: PurchaseRequestEvent[];
+  totals: RequestTotals;
+  byStatus: RequestSlice<RequestStatus>[];
+  byPriority: RequestSlice<RequestPriority>[];
+  topSuppliers: RequestSupplierTotal[];
+  products: {
+    id: number;
+    name: string;
+    reference: string | null;
+    supplier_id: number;
+  }[];
+  suppliers: { id: number; name: string }[];
+};
+
 export type InvoiceStatusTotal = {
   status: InvoiceStatus;
   count: number;

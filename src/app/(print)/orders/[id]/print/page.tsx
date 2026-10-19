@@ -158,7 +158,7 @@ export default async function OrderPrintPage({
         </table>
 
         <p className="mt-6 text-[9px] leading-relaxed text-[#6b6b6b]">
-          Document reconstitué depuis la commande enregistrée dans LABSTOCK.
+          Document reconstitué depuis la commande enregistrée dans Labstock TN.
           Les quantités « Reçu » reflètent les réceptions validées à la date
           d&apos;impression.
         </p>

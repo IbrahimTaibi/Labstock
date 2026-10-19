@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "LABSTOCK — Gestion des stocks de laboratoire",
+  title: "Labstock TN — Gestion des stocks de laboratoire",
   description:
     "Suivi en temps réel du stock de laboratoire, des lots FEFO et des factures fournisseurs.",
 };

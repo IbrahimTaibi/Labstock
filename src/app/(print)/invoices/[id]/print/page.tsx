@@ -168,7 +168,7 @@ export default async function InvoicePrintPage({
 
         <footer className="mt-8 border-t border-[#e0e0e0] pt-3 text-[9px] leading-relaxed text-[#6b6b6b]">
           <p>
-            Document généré par LABSTOCK le {formatDate(new Date().toISOString())}.
+            Document généré par Labstock TN le {formatDate(new Date().toISOString())}.
             Montants exprimés en dinars tunisiens, tels qu&apos;enregistrés dans
             le suivi des factures fournisseurs.
           </p>

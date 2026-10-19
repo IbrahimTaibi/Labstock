@@ -59,7 +59,7 @@ export default async function IssuePreviewPage() {
 
         <p className="mt-4 rounded border border-[#c9822f] bg-[#fdf3e7] px-3 py-2 text-[10px] leading-relaxed text-[#8a5410]">
           Document de préparation. Le stock n&apos;est pas encore déduit :
-          la sortie doit être validée dans LABSTOCK, où elle sera signée et
+          la sortie doit être validée dans Labstock TN, où elle sera signée et
           horodatée.
         </p>
 
@@ -172,7 +172,7 @@ export default async function IssuePreviewPage() {
         </div>
 
         <p className="mt-5 text-[9px] text-[#6b6b6b]">
-          Édité le {formatDateTime(new Date().toISOString())} depuis LABSTOCK.
+          Édité le {formatDateTime(new Date().toISOString())} depuis Labstock TN.
           Lots proposés selon la règle FEFO à cette date.
         </p>
       </article>

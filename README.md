@@ -1,4 +1,4 @@
-# LABSTOCK — Gestion des stocks de laboratoire
+# Labstock TN — Gestion des stocks de laboratoire
 
 Application de gestion de stock et de facturation pour un laboratoire
 d'analyses, construite avec **Next.js 16** (App Router), **Supabase** (Postgres

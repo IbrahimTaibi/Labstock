@@ -3,7 +3,7 @@ import { FlaskConical } from "lucide-react";
 import { LoginForm } from "./LoginForm";
 
 export const metadata: Metadata = {
-  title: "Connexion — LABSTOCK",
+  title: "Connexion — Labstock TN",
 };
 
 export default async function LoginPage({
@@ -28,7 +28,7 @@ export default async function LoginPage({
           </span>
           <div>
             <div className="text-[17px] font-bold leading-tight tracking-tight text-[var(--text-primary)]">
-              LABSTOCK
+              Labstock TN
             </div>
             <div className="text-[10px] leading-tight text-[var(--text-muted)]">
               Gestion des stocks de laboratoire

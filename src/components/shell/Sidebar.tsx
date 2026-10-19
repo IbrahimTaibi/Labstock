@@ -151,7 +151,7 @@ export function Sidebar({
         </span>
         <div className="min-w-0">
           <div className="text-[14px] font-bold leading-tight tracking-tight text-[var(--text-primary)]">
-            LABSTOCK
+            Labstock TN
           </div>
           <div className="truncate text-[9px] leading-tight text-[var(--text-muted)]">
             {labName ?? "Gestion des stocks de laboratoire"}

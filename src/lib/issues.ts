@@ -6,6 +6,7 @@ import type {
   IssueWorkspaceData,
   LisSource,
   LisWebhookEvent,
+  ManualIssueData,
   PendingConsumable,
   PrescribedAnalysis,
 } from "./types";
@@ -119,6 +120,77 @@ export async function getIssueWorkspace(): Promise<IssueWorkspaceData> {
     lastSync: analyses[0]?.imported_at ?? null,
     sources: optional<LisSource>(sources, "Chargement des connecteurs LIS"),
     events: optional<LisWebhookEvent>(events, "Chargement du journal LIS"),
+  };
+}
+
+/** Articles en stock et lots valides, pour la sortie manuelle. */
+export async function getManualIssueData(): Promise<ManualIssueData> {
+  const supabase = await createClient();
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+  const [products, lots, history] = await Promise.all([
+    supabase
+      .from("products")
+      .select("id, name, reference, manufacturer_ref, stock_qty, categories(name)")
+      .gt("stock_qty", 0)
+      .order("name"),
+    supabase
+      .from("lots")
+      .select("id, product_id, lot_number, expiry_date, current_qty, products(reference)")
+      .gt("current_qty", 0)
+      .gte("expiry_date", today)
+      .order("expiry_date"),
+    supabase
+      .from("stock_issues")
+      .select("id, mode, operator, issued_at, total_references, total_quantity")
+      .order("issued_at", { ascending: false })
+      .limit(8),
+  ]);
+
+  for (const res of [products, lots, history]) {
+    if (res.error) throw new Error(`Chargement des sorties : ${res.error.message}`);
+  }
+
+  const one = <T,>(value: T | T[] | null): T | null =>
+    Array.isArray(value) ? (value[0] ?? null) : value;
+  const fallbackRef = (id: number) => `REF-${String(id).padStart(6, "0")}`;
+
+  type ProductRow = {
+    id: number;
+    name: string;
+    reference: string | null;
+    manufacturer_ref: string | null;
+    stock_qty: number;
+    categories: { name: string } | { name: string }[] | null;
+  };
+  type LotRow = {
+    id: number;
+    product_id: number;
+    lot_number: string;
+    expiry_date: string;
+    current_qty: number;
+    products: { reference: string | null } | { reference: string | null }[] | null;
+  };
+
+  return {
+    products: ((products.data ?? []) as ProductRow[]).map((p) => ({
+      id: p.id,
+      name: p.name,
+      reference: p.reference ?? fallbackRef(p.id),
+      manufacturer_ref: p.manufacturer_ref,
+      category: one(p.categories)?.name ?? "—",
+      stock_qty: p.stock_qty,
+    })),
+    lots: ((lots.data ?? []) as LotRow[]).map((l) => ({
+      id: l.id,
+      product_id: l.product_id,
+      lot_number: l.lot_number,
+      expiry_date: l.expiry_date,
+      current_qty: l.current_qty,
+      reference: one(l.products)?.reference ?? fallbackRef(l.product_id),
+    })),
+    history: (history.data ?? []) as IssueHistoryEntry[],
   };
 }
 

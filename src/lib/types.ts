@@ -97,6 +97,7 @@ export type ProductRow = {
   reference: string | null;
   /** Référence affichée : la vraie, sinon le repli REF-000123. */
   display_reference: string;
+  manufacturer_ref: string | null;
   category_id: number;
   category: string;
   supplier_id: number;
@@ -660,6 +661,8 @@ export type IssueHistoryEntry = {
   issued_at: string;
   total_references: number;
   total_quantity: number;
+  /** Motif ou destination (sorties manuelles) ; absent avant la migration. */
+  note?: string | null;
 };
 
 /** Connecteur LIS déclaré (§3.2). Plusieurs sources peuvent coexister. */
@@ -708,6 +711,33 @@ export type IssueWorkspaceData = {
   lastSync: string | null;
   sources: LisSource[];
   events: LisWebhookEvent[];
+};
+
+/** Article proposé à la sortie manuelle : stock détenu, lots valides. */
+export type IssueProduct = {
+  id: number;
+  name: string;
+  reference: string;
+  manufacturer_ref: string | null;
+  category: string;
+  stock_qty: number;
+};
+
+/** Lot valide (non périmé, quantité > 0), sélectionnable ou scannable. */
+export type IssueLot = {
+  id: number;
+  product_id: number;
+  lot_number: string;
+  expiry_date: string;
+  current_qty: number;
+  /** Référence de l'article, pour reconnaître l'étiquette scannée. */
+  reference: string;
+};
+
+export type ManualIssueData = {
+  products: IssueProduct[];
+  lots: IssueLot[];
+  history: IssueHistoryEntry[];
 };
 
 export type DeliveryStatus = "pending" | "partial" | "received";

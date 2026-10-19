@@ -8,7 +8,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Package,
-  Search,
   Trash2,
   TriangleAlert,
   X,
@@ -25,17 +24,29 @@ import {
   formatDate,
   formatInt,
 } from "@/lib/utils";
-import type { ProductsWorkspaceData, ProductStockState } from "@/lib/types";
+import type { ProductsWorkspaceData } from "@/lib/types";
 import { ProductForm } from "./ProductForm";
+import {
+  EMPTY_FILTERS,
+  ProductFilters,
+  type ProductFilterValues,
+  type StateFilter,
+} from "./ProductFilters";
+
+export type { StateFilter };
 
 const PAGE_SIZE = 25;
-
-const INPUT_CLASS =
-  "h-8 rounded-lg border border-[var(--border)] bg-[var(--page)] px-2.5 text-[11px] text-[var(--text-primary)] outline-none focus:border-[var(--series-1)]";
+/** Même seuil que la page Marchandises : « péremption < 30 jours ». */
+const SOON_DAYS = 30;
 
 type Feedback = { message: string; ok: boolean } | null;
-/** "alert" = sous le seuil ou en rupture, l'entrée du tableau de bord. */
-export type StateFilter = "all" | ProductStockState | "alert";
+
+/** Borne saisie en texte : vide ou illisible = pas de borne. */
+function bound(raw: string): number | null {
+  if (raw.trim() === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
 
 function StatFilter({
   label,
@@ -93,11 +104,17 @@ export function ProductsWorkspace({
   const router = useRouter();
   const [pending, start] = useTransition();
   const [feedback, setFeedback] = useState<Feedback>(null);
-  const [stateFilter, setStateFilter] = useState<StateFilter>(initialState);
-  const [search, setSearch] = useState("");
-  const [categoryId, setCategoryId] = useState<number | "">("");
-  const [supplierId, setSupplierId] = useState<number | "">("");
+  const [filters, setFilters] = useState<ProductFilterValues>({
+    ...EMPTY_FILTERS,
+    state: initialState,
+  });
+  const stateFilter = filters.state;
   const [page, setPage] = useState(0);
+
+  function updateFilters(next: ProductFilterValues) {
+    setFilters(next);
+    setPage(0);
+  }
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -124,25 +141,72 @@ export function ProductsWorkspace({
     });
   }
 
+  /* Synthèse des lots détenus par produit, pour le filtre de péremption. */
+  const lotStats = useMemo(() => {
+    const soonLimit = new Date();
+    soonLimit.setDate(soonLimit.getDate() + SOON_DAYS);
+    const limit = `${soonLimit.getFullYear()}-${String(soonLimit.getMonth() + 1).padStart(2, "0")}-${String(soonLimit.getDate()).padStart(2, "0")}`;
+
+    const stats = new Map<number, { count: number; expired: boolean; soon: boolean }>();
+    for (const lot of data.lots) {
+      const entry = stats.get(lot.product_id) ?? { count: 0, expired: false, soon: false };
+      entry.count += 1;
+      if (lot.is_expired) entry.expired = true;
+      else if (lot.expiry_date <= limit) entry.soon = true;
+      stats.set(lot.product_id, entry);
+    }
+    return stats;
+  }, [data.lots]);
+
   const filtered = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return data.products.filter((p) => {
-      if (stateFilter === "alert" && p.state === "ok") return false;
-      if (
-        stateFilter !== "all" &&
-        stateFilter !== "alert" &&
-        p.state !== stateFilter
-      )
+    const f = filters;
+    const needle = f.search.trim().toLowerCase();
+    const [priceMin, priceMax, stockMin, stockMax] = [
+      bound(f.priceMin),
+      bound(f.priceMax),
+      bound(f.stockMin),
+      bound(f.stockMax),
+    ];
+
+    const result = data.products.filter((p) => {
+      if (f.state === "alert" && p.state === "ok") return false;
+      if (f.state !== "all" && f.state !== "alert" && p.state !== f.state)
         return false;
-      if (categoryId !== "" && p.category_id !== categoryId) return false;
-      if (supplierId !== "" && p.supplier_id !== supplierId) return false;
+      if (f.categoryId !== "" && p.category_id !== f.categoryId) return false;
+      if (f.supplierId !== "" && p.supplier_id !== f.supplierId) return false;
+      if (priceMin !== null && p.unit_price < priceMin) return false;
+      if (priceMax !== null && p.unit_price > priceMax) return false;
+      if (stockMin !== null && p.stock_qty < stockMin) return false;
+      if (stockMax !== null && p.stock_qty > stockMax) return false;
+
+      if (f.expiry !== "all") {
+        const lots = lotStats.get(p.id);
+        if (f.expiry === "expired" && !lots?.expired) return false;
+        if (f.expiry === "soon" && !lots?.soon) return false;
+        if (f.expiry === "with_lots" && !lots) return false;
+        if (f.expiry === "no_lots" && lots) return false;
+      }
+
       if (needle === "") return true;
-      return (
-        p.name.toLowerCase().includes(needle) ||
-        p.display_reference.toLowerCase().includes(needle)
-      );
+      return [p.name, p.display_reference, p.manufacturer_ref ?? "", p.supplier]
+        .some((field) => field.toLowerCase().includes(needle));
     });
-  }, [data.products, stateFilter, categoryId, supplierId, search]);
+
+    const byName = (a: (typeof result)[number], b: (typeof result)[number]) =>
+      a.name.localeCompare(b.name, "fr");
+    const sorters: Record<ProductFilterValues["sort"], typeof byName> = {
+      name: byName,
+      reference: (a, b) =>
+        a.display_reference.localeCompare(b.display_reference, "fr", { numeric: true }),
+      stock_asc: (a, b) => a.stock_qty - b.stock_qty || byName(a, b),
+      stock_desc: (a, b) => b.stock_qty - a.stock_qty || byName(a, b),
+      value_desc: (a, b) => b.stock_value - a.stock_value || byName(a, b),
+      price_asc: (a, b) => a.unit_price - b.unit_price || byName(a, b),
+      price_desc: (a, b) => b.unit_price - a.unit_price || byName(a, b),
+      recent: (a, b) => b.created_at.localeCompare(a.created_at) || byName(a, b),
+    };
+    return result.sort(sorters[f.sort]);
+  }, [data.products, filters, lotStats]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, pageCount - 1);
@@ -152,8 +216,7 @@ export function ProductsWorkspace({
   );
 
   function pickFilter(filter: StateFilter) {
-    setStateFilter(filter);
-    setPage(0);
+    updateFilters({ ...filters, state: filter });
   }
 
   return (
@@ -213,6 +276,15 @@ export function ProductsWorkspace({
         />
       </div>
 
+      <ProductFilters
+        value={filters}
+        onChange={updateFilters}
+        categories={data.categories}
+        suppliers={data.suppliers}
+        resultCount={filtered.length}
+        total={data.products.length}
+      />
+
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_310px]">
         {/* Catalogue */}
         <section className="card min-w-0 p-4">
@@ -223,63 +295,6 @@ export function ProductsWorkspace({
                 ({formatInt(filtered.length)})
               </span>
             </h2>
-
-            <div className="ml-auto flex flex-wrap items-center gap-2">
-              <select
-                value={categoryId}
-                onChange={(e) => {
-                  setCategoryId(
-                    e.target.value === "" ? "" : Number(e.target.value)
-                  );
-                  setPage(0);
-                }}
-                className={INPUT_CLASS}
-                aria-label="Filtrer par catégorie"
-              >
-                <option value="">Toutes catégories</option>
-                {data.categories.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                value={supplierId}
-                onChange={(e) => {
-                  setSupplierId(
-                    e.target.value === "" ? "" : Number(e.target.value)
-                  );
-                  setPage(0);
-                }}
-                className={INPUT_CLASS}
-                aria-label="Filtrer par fournisseur"
-              >
-                <option value="">Tous fournisseurs</option>
-                {data.suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-              <div className="relative">
-                <Search
-                  size={13}
-                  strokeWidth={2.2}
-                  className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]"
-                  aria-hidden
-                />
-                <input
-                  type="search"
-                  value={search}
-                  onChange={(e) => {
-                    setSearch(e.target.value);
-                    setPage(0);
-                  }}
-                  placeholder="Nom ou référence…"
-                  className={cn(INPUT_CLASS, "w-44 pl-8")}
-                />
-              </div>
-            </div>
           </div>
 
           {rows.length === 0 ? (

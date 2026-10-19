@@ -18,7 +18,7 @@ export async function getProductsWorkspace(): Promise<ProductsWorkspaceData> {
     supabase
       .from("products")
       .select(
-        "id, name, reference, category_id, supplier_id, unit_price, stock_qty, min_stock, created_at, categories(name), suppliers(name)"
+        "id, name, reference, manufacturer_ref, category_id, supplier_id, unit_price, stock_qty, min_stock, created_at, categories(name), suppliers(name)"
       )
       .order("name"),
     supabase.from("categories").select("id, name").order("name"),
@@ -52,6 +52,7 @@ export async function getProductsWorkspace(): Promise<ProductsWorkspaceData> {
       reference: p.reference,
       display_reference:
         p.reference ?? `REF-${String(p.id).padStart(6, "0")}`,
+      manufacturer_ref: p.manufacturer_ref,
       category_id: p.category_id,
       category: joinName(p.categories as Join),
       supplier_id: p.supplier_id,

@@ -48,7 +48,7 @@ const NAV: NavEntry[] = [
     icon: Boxes,
     children: [
       { label: "Lots", href: "/goods", icon: Boxes },
-      { label: "Produits", href: "/products", icon: Package },
+      { label: "Gestion des produits", href: "/products", icon: Package },
     ],
   },
   {

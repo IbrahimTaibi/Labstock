@@ -1,7 +1,9 @@
 /* Remplacement des fournisseurs par la liste FOURN-0001 à FOURN-0006.
 
    À exécuter une fois dans l'éditeur SQL Supabase (rôle postgres).
-   Tout se fait dans une transaction : en cas d'erreur, rien n'est modifié.
+   Un seul bloc DO, donc une seule transaction : en cas d'erreur, rien n'est
+   modifié. (L'éditeur valide chaque instruction séparément : une table
+   temporaire créée hors du bloc disparaîtrait avant d'être lue.)
    Indépendant de replace_catalogue_vidas.sql : l'ordre d'exécution est libre.
 
    Laboratoire cible : le premier laboratoire (min(id)). Pour en viser un
@@ -14,20 +16,18 @@
    réceptionnés restent en stock. Les factures de sous-traitance ne sont pas
    concernées. */
 
-begin;
+do $$
+declare
+  v_lab integer := (select min(id) from public.laboratories);
+  v_mmm integer;
+  v_deleted integer;
+begin
+  if v_lab is null then
+    raise exception 'Aucun laboratoire trouvé.';
+  end if;
 
-create temp table _suppliers (
-  code text,
-  name text,
-  address text,
-  postal_code text,
-  phone text,
-  mobile text,
-  tax_id text,
-  email text
-) on commit drop;
-
-insert into _suppliers values
+  create temp table _suppliers on commit drop as
+  select * from (values
   ('FOURN-0001', 'MMM', '12 RUE DES ENTREPRENEURS - LA CHARGUIA II', '1080',
    '70 838 2484 / 70 836 515', '25888400', '06227 V/A/000', 'contact@mmm.tn'),
   ('FOURN-0002', 'PROCHIDIA', 'RUE 8603 N°25 Z.I. LA CHARGUIA TUNIS CARTHAGE', '2035',
@@ -40,17 +40,8 @@ insert into _suppliers values
    '71 450 896 / 79 484 874', '58557409', '1047869J A/M/000', 'contact@sms-scientific.com'),
   -- Adresse e-mail source « contact@bio-health,tn » : virgule corrigée en point.
   ('FOURN-0006', 'BIO HEALTH', '28 RUE ABOU EL KACEM CHEBBI LA GOULETTE TUNIS', '2060',
-   '71419347', '29 368 027 / 29 368 224', '1343166 K/B/M 000', 'contact@bio-health.tn');
-
-do $$
-declare
-  v_lab integer := (select min(id) from public.laboratories);
-  v_mmm integer;
-  v_deleted integer;
-begin
-  if v_lab is null then
-    raise exception 'Aucun laboratoire trouvé.';
-  end if;
+   '71419347', '29 368 027 / 29 368 224', '1343166 K/B/M 000', 'contact@bio-health.tn')
+  ) as s(code, name, address, postal_code, phone, mobile, tax_id, email);
 
   /* Les fournisseurs n'ont pas de colonnes dédiées au code, au GSM ni au
      matricule fiscal : le GSM rejoint le téléphone, le reste les notes. */
@@ -109,5 +100,3 @@ begin
   raise notice '% fournisseurs supprimés, % fournisseurs en place (laboratoire %).',
     v_deleted, (select count(*) from public.suppliers where lab_id = v_lab), v_lab;
 end $$;
-
-commit;

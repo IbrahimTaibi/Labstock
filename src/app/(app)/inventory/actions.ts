@@ -67,6 +67,56 @@ export async function saveCount(
   return { status: "success", message: "Comptage enregistré." };
 }
 
+/** Fiche complémentaire d'un lot scanné : ce que la ligne de comptage ne porte pas. */
+export type ScanProductInfo = {
+  manufacturer_ref: string | null;
+  supplier: string | null;
+  stock_qty: number;
+  min_stock: number;
+  alert_stock: number;
+  lot_location: string | null;
+  lot_packaging: string | null;
+  lot_manufacturer: string | null;
+  lot_received_at: string;
+};
+
+export async function getScanProductInfo(
+  productId: number,
+  lotId: number
+): Promise<ScanProductInfo | null> {
+  const user = await getCurrentUser();
+  if (!user) return null;
+
+  const supabase = await createClient();
+  const [product, lot] = await Promise.all([
+    supabase
+      .from("products")
+      .select("manufacturer_ref, stock_qty, min_stock, alert_stock, suppliers(name)")
+      .eq("id", productId)
+      .maybeSingle(),
+    supabase
+      .from("lots")
+      .select("location, packaging, manufacturer, created_at")
+      .eq("id", lotId)
+      .maybeSingle(),
+  ]);
+
+  if (product.error || lot.error || !product.data || !lot.data) return null;
+
+  const supplier = product.data.suppliers as { name: string } | { name: string }[] | null;
+  return {
+    manufacturer_ref: product.data.manufacturer_ref,
+    supplier: (Array.isArray(supplier) ? supplier[0]?.name : supplier?.name) ?? null,
+    stock_qty: product.data.stock_qty,
+    min_stock: product.data.min_stock,
+    alert_stock: product.data.alert_stock,
+    lot_location: lot.data.location,
+    lot_packaging: lot.data.packaging,
+    lot_manufacturer: lot.data.manufacturer,
+    lot_received_at: lot.data.created_at,
+  };
+}
+
 export async function closeSession(sessionId: number): Promise<InventoryState> {
   const user = await getCurrentUser();
   if (!user) return { status: "error", message: "Session expirée." };

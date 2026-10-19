@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   ChevronLeft,
@@ -16,9 +16,21 @@ type Filter = "all" | "counted" | "remaining" | "variance";
 
 const PAGE_SIZE = 20;
 
+/** Ligne à montrer après un scan. `nonce` distingue deux scans du même lot. */
+export type CountFocus = {
+  nonce: number;
+  lineId?: number;
+  /** Place le curseur dans la quantité comptée de la ligne. */
+  edit?: boolean;
+  /** Filtre le tableau, quand le scan désigne plusieurs lots. */
+  search?: string;
+};
+
 export function CountTable({
   lines,
   drafts,
+  focus,
+  onEditDone,
   onDraftChange,
   onCommit,
   disabled,
@@ -26,6 +38,9 @@ export function CountTable({
   lines: InventoryLine[];
   /** Saisies en cours, non encore enregistrées. */
   drafts: Record<number, string>;
+  focus: CountFocus | null;
+  /** Appelé après validation d'une quantité saisie suite à un scan. */
+  onEditDone: () => void;
   onDraftChange: (lineId: number, value: string) => void;
   onCommit: (lineId: number, value: string) => void;
   disabled: boolean;
@@ -33,6 +48,34 @@ export function CountTable({
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
   const [page, setPage] = useState(0);
+  const inputs = useRef(new Map<number, HTMLInputElement>());
+  const rowRefs = useRef(new Map<number, HTMLTableRowElement>());
+
+  /* Un nouveau scan ramène la ligne visée à l'écran : filtres levés et page
+     ajustée, pendant le rendu plutôt que dans un effet. */
+  const [seenNonce, setSeenNonce] = useState<number | null>(null);
+  if (focus && focus.nonce !== seenNonce) {
+    setSeenNonce(focus.nonce);
+    setFilter("all");
+    if (focus.search !== undefined) {
+      setSearch(focus.search);
+      setPage(0);
+    } else {
+      setSearch("");
+      const index = lines.findIndex((line) => line.id === focus.lineId);
+      if (index >= 0) setPage(Math.floor(index / PAGE_SIZE));
+    }
+  }
+
+  useEffect(() => {
+    if (!focus?.lineId) return;
+    rowRefs.current.get(focus.lineId)?.scrollIntoView({ block: "nearest" });
+    if (focus.edit) {
+      const input = inputs.current.get(focus.lineId);
+      input?.focus();
+      input?.select();
+    }
+  }, [focus]);
 
   const filtered = useMemo(() => {
     const needle = search.trim().toLowerCase();
@@ -125,8 +168,24 @@ export function CountTable({
                     : String(line.counted_qty);
               const variance = line.variance_units;
 
+              const scanned = focus?.lineId === line.id;
+
               return (
-                <tr key={line.id}>
+                <tr
+                  key={line.id}
+                  ref={(node) => {
+                    if (node) rowRefs.current.set(line.id, node);
+                    else rowRefs.current.delete(line.id);
+                  }}
+                  style={
+                    scanned
+                      ? {
+                          background:
+                            "color-mix(in srgb, var(--series-1) 10%, transparent)",
+                        }
+                      : undefined
+                  }
+                >
                   <Td align="center">
                     {line.is_counted ? (
                       <Check
@@ -157,6 +216,10 @@ export function CountTable({
                   <Td align="right">{formatInt(line.expected_qty)}</Td>
                   <Td align="right">
                     <input
+                      ref={(node) => {
+                        if (node) inputs.current.set(line.id, node);
+                        else inputs.current.delete(line.id);
+                      }}
                       type="number"
                       min={0}
                       step={1}
@@ -167,6 +230,8 @@ export function CountTable({
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
                           onCommit(line.id, (event.target as HTMLInputElement).value);
+                          // Saisie demandée par un scan : retour à la douchette.
+                          if (focus?.edit && focus.lineId === line.id) onEditDone();
                         }
                       }}
                       placeholder="—"

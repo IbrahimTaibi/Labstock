@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
@@ -17,10 +17,17 @@ import {
   openSession,
   saveCount,
 } from "@/app/(app)/inventory/actions";
+import { matchScan } from "@/lib/barcode-scan";
 import { summarizeCount } from "@/lib/inventory-summary";
-import type { InventoryScope, InventoryWorkspaceData } from "@/lib/types";
+import type {
+  InventoryLine,
+  InventoryScope,
+  InventoryWorkspaceData,
+} from "@/lib/types";
 import { formatAmount, formatDateTime, formatInt } from "@/lib/utils";
-import { CountTable } from "./CountTable";
+import { CountTable, type CountFocus } from "./CountTable";
+import { ScanBox, type ScanMode, type ScanOutcome } from "./ScanBox";
+import { ScannedProductCard } from "./ScannedProductCard";
 
 type Feedback = { message: string; ok: boolean } | null;
 
@@ -32,9 +39,26 @@ export function InventoryWorkspace({ data }: { data: InventoryWorkspaceData }) {
   const [categoryId, setCategoryId] = useState<string>("");
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [confirmClose, setConfirmClose] = useState(false);
+  const [focus, setFocus] = useState<CountFocus | null>(null);
+  const [scannedLineId, setScannedLineId] = useState<number | null>(null);
+  const scanInputRef = useRef<HTMLInputElement>(null);
+  /* Dernière quantité envoyée par ligne. Les scans s'enchaînent plus vite
+     que le rafraîchissement : partir de `counted_qty` perdrait des unités. */
+  const sentCounts = useRef<Record<number, number>>({});
 
   const session = data.openSession;
   const totals = summarizeCount(data.lines);
+  const scannedLine = data.lines.find((line) => line.id === scannedLineId) ?? null;
+
+  /** Quantité comptée affichée : le brouillon en cours prime sur la base. */
+  function currentCount(line: InventoryLine) {
+    const draft = drafts[line.id];
+    if (draft !== undefined && draft.trim() !== "") {
+      const value = Number.parseInt(draft, 10);
+      if (Number.isInteger(value)) return value;
+    }
+    return line.counted_qty;
+  }
 
   function run(action: () => Promise<{ status: string; message: string }>) {
     setFeedback(null);
@@ -58,11 +82,14 @@ export function InventoryWorkspace({ data }: { data: InventoryWorkspaceData }) {
     }
 
     const line = data.lines.find((row) => row.id === lineId);
-    if (line && line.counted_qty === value) return;
+    const known = sentCounts.current[lineId] ?? line?.counted_qty;
+    if (known === value) return;
+    sentCounts.current[lineId] = value;
 
     start(async () => {
       const result = await saveCount(lineId, value);
       if (result.status === "error") {
+        delete sentCounts.current[lineId];
         setFeedback({ message: result.message, ok: false });
       } else {
         setDrafts((current) => {
@@ -73,6 +100,64 @@ export function InventoryWorkspace({ data }: { data: InventoryWorkspaceData }) {
         router.refresh();
       }
     });
+  }
+
+  function handleScan(code: string, mode: ScanMode): ScanOutcome {
+    const match = matchScan(code, data.lines);
+
+    if (match.kind === "none") {
+      return {
+        ok: false,
+        title: `Code « ${code.trim()} » introuvable`,
+        detail: "aucun lot de ce comptage ne porte ce code.",
+      };
+    }
+
+    if (match.kind === "product") {
+      setFocus({ nonce: Date.now(), search: match.lines[0].reference });
+      return {
+        ok: false,
+        title: `${match.lines[0].product_name} : ${match.lines.length} lots`,
+        detail: "scannez l'étiquette du lot, ou saisissez la quantité dans le tableau.",
+      };
+    }
+
+    const line = match.line;
+    const label = `${line.product_name} · lot ${line.lot_number}`;
+    setScannedLineId(line.id);
+
+    if (mode === "locate") {
+      setFocus({ nonce: Date.now(), lineId: line.id, edit: true });
+      return { ok: true, title: label, detail: "saisissez la quantité puis Entrée." };
+    }
+
+    setFocus({ nonce: Date.now(), lineId: line.id });
+    const next = (sentCounts.current[line.id] ?? line.counted_qty ?? 0) + 1;
+    sentCounts.current[line.id] = next;
+    setDrafts((current) => ({ ...current, [line.id]: String(next) }));
+
+    start(async () => {
+      const result = await saveCount(line.id, next);
+      if (result.status === "error") {
+        delete sentCounts.current[line.id];
+        setFeedback({ message: result.message, ok: false });
+        return;
+      }
+      setDrafts((current) => {
+        /* Un scan plus récent a pu reposer un brouillon : on le garde. */
+        if (current[line.id] !== String(next)) return current;
+        const rest = { ...current };
+        delete rest[line.id];
+        return rest;
+      });
+      router.refresh();
+    });
+
+    return {
+      ok: true,
+      title: label,
+      detail: `compté : ${formatInt(next)} / attendu ${formatInt(line.expected_qty)}`,
+    };
   }
 
   return (
@@ -221,9 +306,25 @@ export function InventoryWorkspace({ data }: { data: InventoryWorkspaceData }) {
 
         {session ? (
           <>
+            <ScanBox onScan={handleScan} inputRef={scanInputRef} />
+
+            {scannedLine ? (
+              <ScannedProductCard
+                line={scannedLine}
+                lines={data.lines}
+                counted={currentCount}
+                onClose={() => {
+                  setScannedLineId(null);
+                  scanInputRef.current?.focus();
+                }}
+              />
+            ) : null}
+
             <CountTable
               lines={data.lines}
               drafts={drafts}
+              focus={focus}
+              onEditDone={() => scanInputRef.current?.focus()}
               disabled={pending}
               onDraftChange={(lineId, value) =>
                 setDrafts((current) => ({ ...current, [lineId]: value }))

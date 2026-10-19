@@ -64,7 +64,7 @@ export function expiryToYYMMDD(iso: string): string | null {
 }
 
 /** Restreint au jeu de caractères GS1 « AI 82 », en majuscules. */
-function sanitize(value: string): string {
+export function sanitize(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9\-./]/g, "");
 }
 

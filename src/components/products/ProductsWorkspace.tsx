@@ -3,11 +3,20 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  AlertTriangle,
+  Boxes,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
-  Package,
+  ChevronsLeft,
+  ChevronsRight,
+  Coins,
+  FlaskConical,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Save,
+  Search,
+  Tags,
   Trash2,
   TriangleAlert,
   X,
@@ -15,84 +24,31 @@ import {
 } from "lucide-react";
 import { deleteProduct } from "@/app/(app)/products/actions";
 import type { ProductState } from "@/app/(app)/products/actions";
-import { DataTable, Td, Th } from "@/components/DataTable";
-import { StockStatusBadge } from "@/components/StockStatusBadge";
-import {
-  cn,
-  formatAmount,
-  formatCompact,
-  formatDate,
-  formatInt,
-} from "@/lib/utils";
-import type { ProductsWorkspaceData } from "@/lib/types";
-import { ProductForm } from "./ProductForm";
-import {
-  EMPTY_FILTERS,
-  ProductFilters,
-  type ProductFilterValues,
-  type StateFilter,
-} from "./ProductFilters";
+import { Donut } from "@/components/charts/Donut";
+import { seriesColor } from "@/components/charts/chart-tokens";
+import { Td, Th } from "@/components/DataTable";
+import { cn, formatDate, formatInt, formatTnd } from "@/lib/utils";
+import type { ProductRow, ProductsWorkspaceData, ProductStockState } from "@/lib/types";
+import { ProductForm, PRODUCT_FORM_ID } from "./ProductForm";
 
-export type { StateFilter };
+/** "alert" = sous le seuil ou en rupture, l'entrée du tableau de bord. */
+export type StateFilter = "all" | ProductStockState | "alert";
 
-const PAGE_SIZE = 25;
-/** Même seuil que la page Marchandises : « péremption < 30 jours ». */
-const SOON_DAYS = 30;
+const STATE_LABELS: Record<Exclude<StateFilter, "all">, string> = {
+  ok: "Disponibles",
+  low: "Sous le seuil",
+  out: "En rupture",
+  alert: "Sous le seuil ou en rupture",
+};
+
+const PAGE_SIZES = [10, 25, 50, 100];
+/* Le donut garde 5 parts lisibles ; le reste est regroupé. */
+const MAX_SLICES = 5;
+
+const TOOLBAR_CLASS =
+  "h-10 rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-[12px] text-[var(--text-primary)] outline-none focus:border-[var(--series-1)]";
 
 type Feedback = { message: string; ok: boolean } | null;
-
-/** Borne saisie en texte : vide ou illisible = pas de borne. */
-function bound(raw: string): number | null {
-  if (raw.trim() === "") return null;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : null;
-}
-
-function StatFilter({
-  label,
-  value,
-  note,
-  color,
-  icon,
-  active,
-  onClick,
-}: {
-  label: string;
-  value: string;
-  note: string;
-  color: string;
-  icon: React.ReactNode;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={cn(
-        "flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-3 py-2 text-left transition-colors",
-        active ? "bg-[var(--page)]" : "hover:bg-[var(--page)]"
-      )}
-      style={active ? { boxShadow: `inset 0 0 0 1px ${color}` } : undefined}
-    >
-      <span className="shrink-0" style={{ color }}>
-        {icon}
-      </span>
-      <span className="min-w-0">
-        <span className="block text-[9px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-          {label}
-        </span>
-        <span className="block truncate text-[17px] font-semibold leading-tight text-[var(--text-primary)]">
-          {value}
-          <span className="ml-1.5 text-[10px] font-normal text-[var(--text-muted)]">
-            {note}
-          </span>
-        </span>
-      </span>
-    </button>
-  );
-}
 
 export function ProductsWorkspace({
   data,
@@ -103,124 +59,134 @@ export function ProductsWorkspace({
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [refreshing, startRefresh] = useTransition();
   const [feedback, setFeedback] = useState<Feedback>(null);
-  const [filters, setFilters] = useState<ProductFilterValues>({
-    ...EMPTY_FILTERS,
-    state: initialState,
-  });
-  const stateFilter = filters.state;
-  const [page, setPage] = useState(0);
-
-  function updateFilters(next: ProductFilterValues) {
-    setFilters(next);
-    setPage(0);
-  }
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  /* Incrémenté par « Nouveau » et après une création : remonte le
+     formulaire vide même s'il l'était déjà. */
+  const [formNonce, setFormNonce] = useState(0);
+  const [formValid, setFormValid] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
 
-  /* Le formulaire sert à la fois à créer et à modifier : repasser en création
-     demande de désélectionner, ce qu'un bouton explicite rend évident. */
-  function startCreate() {
-    setSelectedId(null);
-    setConfirmDelete(false);
-  }
+  const [stateFilter, setStateFilter] = useState<StateFilter>(initialState);
+  const [search, setSearch] = useState("");
+  const [categoryId, setCategoryId] = useState<number | "">("");
+  const [supplierId, setSupplierId] = useState<number | "">("");
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
 
-  /* Sélection dérivée : si le produit disparaît côté serveur, la fiche et le
-     détail se vident d'eux-mêmes. */
   const selected = data.products.find((p) => p.id === selectedId) ?? null;
-  const selectedLots = selected
-    ? data.lots.filter((l) => l.product_id === selected.id)
-    : [];
 
   function run(action: () => Promise<ProductState>) {
     setFeedback(null);
+    const creating = selected === null;
     start(async () => {
       const result = await action();
       setFeedback({ message: result.message, ok: result.status === "success" });
-      if (result.status === "success") router.refresh();
+      if (result.status === "success") {
+        if (creating) setFormNonce((n) => n + 1);
+        router.refresh();
+      }
     });
   }
 
-  /* Synthèse des lots détenus par produit, pour le filtre de péremption. */
-  const lotStats = useMemo(() => {
-    const soonLimit = new Date();
-    soonLimit.setDate(soonLimit.getDate() + SOON_DAYS);
-    const limit = `${soonLimit.getFullYear()}-${String(soonLimit.getMonth() + 1).padStart(2, "0")}-${String(soonLimit.getDate()).padStart(2, "0")}`;
+  function startNew() {
+    setSelectedId(null);
+    setFormNonce((n) => n + 1);
+    setFeedback(null);
+  }
 
-    const stats = new Map<number, { count: number; expired: boolean; soon: boolean }>();
-    for (const lot of data.lots) {
-      const entry = stats.get(lot.product_id) ?? { count: 0, expired: false, soon: false };
-      entry.count += 1;
-      if (lot.is_expired) entry.expired = true;
-      else if (lot.expiry_date <= limit) entry.soon = true;
-      stats.set(lot.product_id, entry);
-    }
-    return stats;
-  }, [data.lots]);
+  function edit(product: ProductRow) {
+    setSelectedId(product.id);
+    setConfirmDeleteId(null);
+    setFeedback(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function refresh() {
+    startRefresh(() => router.refresh());
+  }
+
+  function resetPage<T>(setter: (value: T) => void) {
+    return (value: T) => {
+      setter(value);
+      setPage(0);
+    };
+  }
 
   const filtered = useMemo(() => {
-    const f = filters;
-    const needle = f.search.trim().toLowerCase();
-    const [priceMin, priceMax, stockMin, stockMax] = [
-      bound(f.priceMin),
-      bound(f.priceMax),
-      bound(f.stockMin),
-      bound(f.stockMax),
-    ];
-
-    const result = data.products.filter((p) => {
-      if (f.state === "alert" && p.state === "ok") return false;
-      if (f.state !== "all" && f.state !== "alert" && p.state !== f.state)
+    const needle = search.trim().toLowerCase();
+    return data.products.filter((p) => {
+      if (stateFilter === "alert" && p.state === "ok") return false;
+      if (stateFilter !== "all" && stateFilter !== "alert" && p.state !== stateFilter)
         return false;
-      if (f.categoryId !== "" && p.category_id !== f.categoryId) return false;
-      if (f.supplierId !== "" && p.supplier_id !== f.supplierId) return false;
-      if (priceMin !== null && p.unit_price < priceMin) return false;
-      if (priceMax !== null && p.unit_price > priceMax) return false;
-      if (stockMin !== null && p.stock_qty < stockMin) return false;
-      if (stockMax !== null && p.stock_qty > stockMax) return false;
-
-      if (f.expiry !== "all") {
-        const lots = lotStats.get(p.id);
-        if (f.expiry === "expired" && !lots?.expired) return false;
-        if (f.expiry === "soon" && !lots?.soon) return false;
-        if (f.expiry === "with_lots" && !lots) return false;
-        if (f.expiry === "no_lots" && lots) return false;
-      }
-
-      if (needle === "") return true;
-      return [p.name, p.display_reference, p.manufacturer_ref ?? "", p.supplier]
+      if (categoryId !== "" && p.category_id !== categoryId) return false;
+      if (supplierId !== "" && p.supplier_id !== supplierId) return false;
+      if (!needle) return true;
+      return [p.display_reference, p.name, p.manufacturer_ref ?? "", p.category, p.supplier]
         .some((field) => field.toLowerCase().includes(needle));
     });
+  }, [data.products, stateFilter, categoryId, supplierId, search]);
 
-    const byName = (a: (typeof result)[number], b: (typeof result)[number]) =>
-      a.name.localeCompare(b.name, "fr");
-    const sorters: Record<ProductFilterValues["sort"], typeof byName> = {
-      name: byName,
-      reference: (a, b) =>
-        a.display_reference.localeCompare(b.display_reference, "fr", { numeric: true }),
-      stock_asc: (a, b) => a.stock_qty - b.stock_qty || byName(a, b),
-      stock_desc: (a, b) => b.stock_qty - a.stock_qty || byName(a, b),
-      value_desc: (a, b) => b.stock_value - a.stock_value || byName(a, b),
-      price_asc: (a, b) => a.unit_price - b.unit_price || byName(a, b),
-      price_desc: (a, b) => b.unit_price - a.unit_price || byName(a, b),
-      recent: (a, b) => b.created_at.localeCompare(a.created_at) || byName(a, b),
-    };
-    return result.sort(sorters[f.sort]);
-  }, [data.products, filters, lotStats]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const current = Math.min(page, pageCount - 1);
+  const rows = filtered.slice(current * pageSize, current * pageSize + pageSize);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, pageCount - 1);
-  const rows = filtered.slice(
-    safePage * PAGE_SIZE,
-    safePage * PAGE_SIZE + PAGE_SIZE
-  );
-
-  function pickFilter(filter: StateFilter) {
-    updateFilters({ ...filters, state: filter });
-  }
+  /* Répartition des articles par catégorie, parts décroissantes. */
+  const slices = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of data.products) counts.set(p.category, (counts.get(p.category) ?? 0) + 1);
+    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    const head = sorted.slice(0, MAX_SLICES);
+    const rest = sorted.slice(MAX_SLICES).reduce((sum, [, n]) => sum + n, 0);
+    const result = head.map(([label, value], i) => ({ label, value, color: seriesColor(i) }));
+    if (rest > 0) result.push({ label: "Autres", value: rest, color: seriesColor(MAX_SLICES) });
+    return result;
+  }, [data.products]);
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Indicateurs */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <Kpi
+          icon={<Boxes size={20} aria-hidden />}
+          color="var(--series-1)"
+          label="Nombre total d'articles"
+          value={formatInt(data.totals.count)}
+          note="Articles enregistrés"
+        />
+        <Kpi
+          icon={<Tags size={20} aria-hidden />}
+          color="var(--series-2)"
+          label="Catégories d'articles"
+          value={formatInt(data.categories.length)}
+          note="Catégories disponibles"
+        />
+        <Kpi
+          icon={<Coins size={20} aria-hidden />}
+          color="var(--serious)"
+          label="Valeur totale du stock"
+          value={formatTnd(data.totals.stock_value)}
+          unit="TND"
+          note="(Prix HT)"
+          emphasis
+        />
+        <Kpi
+          icon={<FlaskConical size={20} aria-hidden />}
+          color="var(--good)"
+          label="Articles actifs"
+          value={formatInt(data.totals.active_count)}
+          note="Articles en stock"
+        />
+        <Kpi
+          icon={<XCircle size={20} aria-hidden />}
+          color="var(--critical)"
+          label="Articles inactifs"
+          value={formatInt(data.totals.inactive_count)}
+          note="Références non utilisées"
+        />
+      </div>
+
       {feedback ? (
         <div
           role="status"
@@ -236,295 +202,448 @@ export function ProductsWorkspace({
         </div>
       ) : null}
 
-      {/* Synthèse-filtre */}
-      <div className="card flex flex-col gap-1 p-1.5 sm:flex-row sm:items-stretch sm:divide-x sm:divide-[var(--border)]">
-        <StatFilter
-          label="Produits"
-          value={formatInt(data.totals.count)}
-          note={`${formatCompact(data.totals.stock_value)} de stock`}
-          color="var(--series-1)"
-          icon={<Package size={16} strokeWidth={2.2} aria-hidden />}
-          active={stateFilter === "all"}
-          onClick={() => pickFilter("all")}
+      {/* 1. Fiche + actions rapides */}
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_240px]">
+        <ProductForm
+          key={selected ? `p${selected.id}` : `new${formNonce}`}
+          product={selected}
+          nextReference={data.next_reference}
+          categories={data.categories}
+          suppliers={data.suppliers}
+          onRun={run}
+          onValidityChange={setFormValid}
         />
-        <StatFilter
-          label="Disponibles"
-          value={formatInt(data.totals.ok_count)}
-          note="au-dessus du seuil"
-          color="var(--good)"
-          icon={<CheckCircle2 size={16} strokeWidth={2.2} aria-hidden />}
-          active={stateFilter === "ok"}
-          onClick={() => pickFilter("ok")}
-        />
-        <StatFilter
-          label="Sous le seuil"
-          value={formatInt(data.totals.low_count)}
-          note="à recommander"
-          color="var(--warning)"
-          icon={<AlertTriangle size={16} strokeWidth={2.2} aria-hidden />}
-          active={stateFilter === "low" || stateFilter === "alert"}
-          onClick={() => pickFilter("low")}
-        />
-        <StatFilter
-          label="En rupture"
-          value={formatInt(data.totals.out_count)}
-          note="stock à zéro"
-          color="var(--critical)"
-          icon={<XCircle size={16} strokeWidth={2.2} aria-hidden />}
-          active={stateFilter === "out" || stateFilter === "alert"}
-          onClick={() => pickFilter("out")}
-        />
+
+        <aside className="card flex flex-col gap-2 p-4">
+          <h2 className="mb-1 text-[11px] font-bold uppercase tracking-wider text-[var(--text-primary)]">
+            Actions rapides
+          </h2>
+          <button
+            type="button"
+            onClick={startNew}
+            className="flex h-10 items-center justify-center gap-2 rounded-lg text-[12px] font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ background: "var(--series-1)" }}
+          >
+            <Plus size={15} aria-hidden />
+            Nouveau
+          </button>
+          <button
+            type="submit"
+            form={PRODUCT_FORM_ID}
+            disabled={pending || !formValid}
+            className="flex h-10 items-center justify-center gap-2 rounded-lg text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{ background: "var(--serious)" }}
+          >
+            <Save size={15} aria-hidden />
+            {pending ? "Enregistrement…" : selected ? "Enregistrer" : "Valider"}
+          </button>
+          <button
+            type="button"
+            onClick={refresh}
+            className="flex h-10 items-center justify-center gap-2 rounded-lg border border-[var(--border)] text-[12px] font-medium text-[var(--text-secondary)] transition-colors hover:bg-[var(--page)]"
+          >
+            <RefreshCw size={14} className={refreshing ? "animate-spin" : undefined} aria-hidden />
+            Actualiser
+          </button>
+          {selected ? (
+            <button
+              type="button"
+              onClick={() => setSelectedId(null)}
+              className="flex h-9 items-center justify-center gap-1.5 rounded-lg text-[11px] font-medium text-[var(--text-muted)] transition-colors hover:bg-[var(--page)]"
+            >
+              <X size={13} aria-hidden />
+              Annuler la modification
+            </button>
+          ) : null}
+          <p className="mt-auto pt-2 text-[9px] leading-relaxed text-[var(--text-muted)]">
+            Le stock n&apos;est pas saisi ici : il évolue par les réceptions,
+            les sorties et les inventaires.
+          </p>
+        </aside>
       </div>
 
-      <ProductFilters
-        value={filters}
-        onChange={updateFilters}
-        categories={data.categories}
-        suppliers={data.suppliers}
-        resultCount={filtered.length}
-        total={data.products.length}
-      />
-
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_310px]">
-        {/* Catalogue */}
+      {/* 2. Liste + répartition */}
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_240px]">
         <section className="card min-w-0 p-4">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-              Catalogue
-              <span className="ml-1.5 font-normal normal-case tracking-normal text-[var(--text-muted)]">
-                ({formatInt(filtered.length)})
-              </span>
-            </h2>
+          <h2 className="mb-3 text-[12px] font-bold uppercase tracking-wider text-[var(--text-primary)]">
+            2. Liste des articles enregistrés
+          </h2>
+
+          <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end">
+            <div className="relative">
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => resetPage(setSearch)(e.target.value)}
+                placeholder="Rechercher (référence, désignation, fabricant, catégorie…)"
+                aria-label="Rechercher un article"
+                className={cn(TOOLBAR_CLASS, "w-full pr-9")}
+              />
+              <Search
+                size={16}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--series-1)]"
+                aria-hidden
+              />
+            </div>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold text-[var(--text-secondary)]">Catégorie</span>
+              <select
+                value={categoryId}
+                onChange={(e) =>
+                  resetPage(setCategoryId)(e.target.value === "" ? "" : Number(e.target.value))
+                }
+                className={TOOLBAR_CLASS}
+              >
+                <option value="">Toutes</option>
+                {data.categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] font-semibold text-[var(--text-secondary)]">Fournisseur</span>
+              <select
+                value={supplierId}
+                onChange={(e) =>
+                  resetPage(setSupplierId)(e.target.value === "" ? "" : Number(e.target.value))
+                }
+                className={TOOLBAR_CLASS}
+              >
+                <option value="">Tous</option>
+                {data.suppliers.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={refresh}
+              className="flex h-10 items-center justify-center gap-2 rounded-lg border border-[var(--border)] px-3 text-[12px] font-medium text-[var(--series-1)] transition-colors hover:bg-[var(--page)]"
+            >
+              <RefreshCw size={14} className={refreshing ? "animate-spin" : undefined} aria-hidden />
+              Actualiser
+            </button>
           </div>
 
-          {rows.length === 0 ? (
-            <p className="py-6 text-center text-[11px] text-[var(--text-muted)]">
-              Aucun produit ne correspond à ces critères.
-            </p>
-          ) : (
-            <DataTable>
-              <thead>
+          {stateFilter !== "all" ? (
+            <button
+              type="button"
+              onClick={() => resetPage(setStateFilter)("all")}
+              className="mb-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-medium"
+              style={{
+                color: "var(--series-1)",
+                background: "color-mix(in srgb, var(--series-1) 12%, transparent)",
+              }}
+            >
+              {STATE_LABELS[stateFilter]}
+              <X size={11} strokeWidth={2.4} aria-hidden />
+              <span className="sr-only">Retirer ce filtre</span>
+            </button>
+          ) : null}
+
+          <div className="overflow-x-auto rounded-lg border border-[var(--border)]">
+            <table className="w-full min-w-[980px] border-collapse text-[11px]">
+              <thead style={{ background: "var(--series-1)" }}>
                 <tr>
-                  <Th>Produit</Th>
-                  <Th>Référence</Th>
-                  <Th>Catégorie</Th>
-                  <Th align="right">Stock</Th>
-                  <Th align="right">Seuil</Th>
-                  <Th align="right">P.U.</Th>
-                  <Th align="right">Valeur</Th>
-                  <Th>État</Th>
+                  <Head>Référence</Head>
+                  <Head>Réf. fabricant</Head>
+                  <Head>Désignation</Head>
+                  <Head>Conditionnement</Head>
+                  <Head>Catégorie</Head>
+                  <Head>Date création</Head>
+                  <Head align="right">Prix HT (TND)</Head>
+                  <Head align="right">TVA</Head>
+                  <Head align="right">Prix TTC (TND)</Head>
+                  <Head align="center">Actions</Head>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((p) => {
-                  const active = p.id === selectedId;
+                  const ttc = p.unit_price * (1 + p.vat_rate / 100);
+                  const confirming = confirmDeleteId === p.id;
                   return (
                     <tr
                       key={p.id}
-                      onClick={() => {
-                        setSelectedId(active ? null : p.id);
-                        setConfirmDelete(false);
-                      }}
-                      aria-selected={active}
                       className={cn(
-                        "cursor-pointer transition-colors",
-                        active ? "bg-[var(--page)]" : "hover:bg-[var(--page)]"
+                        "transition-colors",
+                        p.id === selectedId ? "bg-[var(--page)]" : "hover:bg-[var(--page)]"
                       )}
                     >
+                      <Td nowrap className="font-semibold">{p.display_reference}</Td>
+                      <Td nowrap>{p.manufacturer_ref ?? "—"}</Td>
                       <Td>
-                        <span className="font-medium">{p.name}</span>
-                        <span className="block text-[9px] text-[var(--text-muted)]">
-                          {p.supplier}
-                        </span>
+                        <span className="block max-w-[240px] truncate">{p.name}</span>
                       </Td>
-                      <Td nowrap>{p.display_reference}</Td>
-                      <Td nowrap>{p.category}</Td>
-                      <Td align="right">{formatInt(p.stock_qty)}</Td>
-                      <Td align="right">{formatInt(p.min_stock)}</Td>
-                      <Td align="right">{formatAmount(p.unit_price)}</Td>
-                      <Td align="right">{formatAmount(p.stock_value)}</Td>
-                      <Td nowrap>
-                        {p.state === "out" ? (
-                          <StockStatusBadge status="out_of_stock" />
-                        ) : p.state === "low" ? (
-                          <StockStatusBadge status="low" />
+                      <Td>
+                        <span className="block max-w-[180px] truncate">{p.packaging ?? "—"}</span>
+                      </Td>
+                      <Td nowrap className="uppercase">{p.category}</Td>
+                      <Td nowrap>{formatDate(p.created_at)}</Td>
+                      <Td align="right" className="tnum">{formatTnd(p.unit_price)}</Td>
+                      <Td align="right" className="tnum">{formatInt(p.vat_rate)}%</Td>
+                      <Td align="right" className="tnum font-semibold">{formatTnd(ttc)}</Td>
+                      <Td align="center" nowrap>
+                        {confirming ? (
+                          <span className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              disabled={pending}
+                              onClick={() => {
+                                setConfirmDeleteId(null);
+                                if (selectedId === p.id) setSelectedId(null);
+                                run(() => deleteProduct(p.id));
+                              }}
+                              className="rounded px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-50"
+                              style={{ background: "var(--critical)" }}
+                            >
+                              Supprimer
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="rounded px-2 py-1 text-[10px] font-medium text-[var(--text-secondary)] hover:bg-[var(--surface)]"
+                            >
+                              Non
+                            </button>
+                          </span>
                         ) : (
-                          <span className="text-[10px] text-[var(--text-muted)]">
-                            OK
+                          <span className="inline-flex items-center gap-1">
+                            <IconButton
+                              label={`Modifier ${p.name}`}
+                              color="var(--series-1)"
+                              onClick={() => edit(p)}
+                            >
+                              <Pencil size={13} aria-hidden />
+                            </IconButton>
+                            <IconButton
+                              label={`Supprimer ${p.name}`}
+                              color="var(--critical)"
+                              onClick={() => setConfirmDeleteId(p.id)}
+                            >
+                              <Trash2 size={13} aria-hidden />
+                            </IconButton>
                           </span>
                         )}
                       </Td>
                     </tr>
                   );
                 })}
+
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="px-2 py-8 text-center text-[11px] text-[var(--text-muted)]">
+                      Aucun article ne correspond à ces critères.
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
-            </DataTable>
-          )}
-
-          {filtered.length > PAGE_SIZE ? (
-            <div className="mt-3 flex items-center justify-between">
-              <span className="tnum text-[10px] text-[var(--text-muted)]">
-                {formatInt(safePage * PAGE_SIZE + 1)}–
-                {formatInt(
-                  Math.min((safePage + 1) * PAGE_SIZE, filtered.length)
-                )}{" "}
-                sur {formatInt(filtered.length)}
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  disabled={safePage === 0}
-                  onClick={() => setPage(safePage - 1)}
-                  className="grid h-7 w-7 place-items-center rounded-lg border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--page)] disabled:opacity-40"
-                >
-                  <ChevronLeft size={14} strokeWidth={2.2} aria-hidden />
-                  <span className="sr-only">Page précédente</span>
-                </button>
-                <span className="tnum px-1 text-[10px] text-[var(--text-muted)]">
-                  {formatInt(safePage + 1)} / {formatInt(pageCount)}
-                </span>
-                <button
-                  type="button"
-                  disabled={safePage >= pageCount - 1}
-                  onClick={() => setPage(safePage + 1)}
-                  className="grid h-7 w-7 place-items-center rounded-lg border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--page)] disabled:opacity-40"
-                >
-                  <ChevronRight size={14} strokeWidth={2.2} aria-hidden />
-                  <span className="sr-only">Page suivante</span>
-                </button>
-              </div>
-            </div>
-          ) : null}
-        </section>
-
-        {/* Colonne latérale : fiche + lots */}
-        <div className="flex flex-col gap-3">
-          <div>
-            {/* key : changer de produit remonte le formulaire, donc repart
-                d'un état neuf sans resynchroniser champ par champ. */}
-            <ProductForm
-              key={selected?.id ?? "nouveau"}
-              product={selected}
-              categories={data.categories}
-              suppliers={data.suppliers}
-              pending={pending}
-              onRun={run}
-              onCancel={() => setSelectedId(null)}
-              onCreateNew={startCreate}
-            />
+            </table>
           </div>
 
-          {selected ? (
-            <section className="card p-4">
-              <header className="mb-2 flex items-start justify-between gap-2">
-                <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-                  Lots en stock
-                  <span className="ml-1.5 font-normal normal-case tracking-normal text-[var(--text-muted)]">
-                    ({formatInt(selectedLots.length)})
-                  </span>
-                </h2>
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(null)}
-                  className="rounded p-1 text-[var(--text-muted)] hover:bg-[var(--page)]"
-                >
-                  <X size={13} strokeWidth={2.2} aria-hidden />
-                  <span className="sr-only">Fermer le détail</span>
-                </button>
-              </header>
+          <Pagination
+            page={current}
+            pageCount={pageCount}
+            pageSize={pageSize}
+            total={filtered.length}
+            onPage={setPage}
+            onPageSize={(size) => {
+              setPageSize(size);
+              setPage(0);
+            }}
+          />
+        </section>
 
-              {selectedLots.length === 0 ? (
-                <p className="py-1 text-[10px] text-[var(--text-muted)]">
-                  Aucun lot détenu : le stock entre par une réception ou une
-                  création de lot (page Marchandises).
-                </p>
-              ) : (
-                <ul className="flex flex-col">
-                  {selectedLots.map((lot, index) => (
-                    <li
-                      key={lot.id}
-                      className="flex items-center gap-2 border-b border-[var(--border)] py-1.5 text-[10px] last:border-b-0"
-                    >
-                      <span className="min-w-0 flex-1 truncate font-medium text-[var(--text-primary)]">
-                        {lot.lot_number}
-                      </span>
-                      {!lot.is_expired && index === 0 ? (
-                        <span
-                          className="shrink-0 rounded px-1 py-px text-[9px] font-semibold"
-                          style={{
-                            color: "var(--good)",
-                            background:
-                              "color-mix(in srgb, var(--good) 12%, transparent)",
-                          }}
-                          title="Lot prioritaire : à consommer en premier (FEFO)"
-                        >
-                          FEFO
-                        </span>
-                      ) : null}
-                      <span
-                        className="tnum shrink-0"
-                        style={
-                          lot.is_expired
-                            ? { color: "var(--critical)" }
-                            : undefined
-                        }
-                      >
-                        {lot.is_expired ? "périmé " : "exp. "}
-                        {formatDate(lot.expiry_date)}
-                      </span>
-                      <span className="tnum w-12 shrink-0 text-right font-semibold text-[var(--text-primary)]">
-                        {formatInt(lot.current_qty)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <div className="mt-3 border-t border-[var(--border)] pt-3">
-                {confirmDelete ? (
-                  <div className="flex flex-col gap-2">
-                    <p className="text-[10px] leading-relaxed text-[var(--text-muted)]">
-                      Supprimer définitivement « {selected.name} » ? Impossible
-                      s&apos;il a des lots, mouvements ou commandes.
-                    </p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        disabled={pending}
-                        onClick={() => {
-                          setConfirmDelete(false);
-                          run(() => deleteProduct(selected.id));
-                        }}
-                        className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg text-[11px] font-semibold text-white disabled:opacity-50"
-                        style={{ background: "var(--critical)" }}
-                      >
-                        <Trash2 size={12} strokeWidth={2.2} aria-hidden />
-                        Confirmer
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setConfirmDelete(false)}
-                        className="flex h-8 items-center rounded-lg border border-[var(--border)] px-2.5 text-[11px] font-medium text-[var(--text-secondary)] hover:bg-[var(--page)]"
-                      >
-                        Annuler
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setConfirmDelete(true)}
-                    className="inline-flex items-center gap-1.5 text-[10px] font-medium text-[var(--text-muted)] hover:text-[var(--critical)]"
-                  >
-                    <Trash2 size={12} strokeWidth={2.2} aria-hidden />
-                    Supprimer ce produit
-                  </button>
-                )}
-              </div>
-            </section>
-          ) : null}
-        </div>
+        <aside className="card p-4">
+          <h2 className="mb-3 text-[11px] font-bold uppercase tracking-wider text-[var(--text-primary)]">
+            Répartition
+          </h2>
+          <p className="mb-3 text-[10px] text-[var(--text-muted)]">Articles par catégorie</p>
+          {slices.length ? (
+            <div className="[&>div]:flex-col [&>div]:items-stretch">
+              <Donut slices={slices} centerLabel="articles" integer size={150} />
+            </div>
+          ) : (
+            <p className="py-6 text-center text-[10px] text-[var(--text-muted)]">Aucun article.</p>
+          )}
+        </aside>
       </div>
+    </div>
+  );
+}
+
+function Kpi({
+  icon,
+  color,
+  label,
+  value,
+  unit,
+  note,
+  emphasis = false,
+}: {
+  icon: React.ReactNode;
+  color: string;
+  label: string;
+  value: string;
+  unit?: string;
+  note: string;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className="card flex items-center gap-3 p-4">
+      <span
+        className="grid h-11 w-11 shrink-0 place-items-center rounded-xl"
+        style={{ color, background: `color-mix(in srgb, ${color} 12%, transparent)` }}
+      >
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[10px] font-semibold" style={{ color: emphasis ? color : "var(--text-secondary)" }}>
+          {label}
+        </span>
+        <span
+          className="tnum block truncate text-[22px] font-bold leading-tight"
+          style={{ color: emphasis ? color : "var(--text-primary)" }}
+        >
+          {value}
+          {unit ? <span className="ml-1 text-[11px] font-semibold">{unit}</span> : null}
+        </span>
+        <span className="block text-[10px] text-[var(--text-muted)]">{note}</span>
+      </span>
+    </div>
+  );
+}
+
+/** En-tête de colonne sur fond plein, comme la maquette. */
+function Head({
+  children,
+  align,
+}: {
+  children: React.ReactNode;
+  align?: "left" | "right" | "center";
+}) {
+  return (
+    <Th align={align} className="whitespace-nowrap border-0 py-2.5 font-semibold text-white">
+      {children}
+    </Th>
+  );
+}
+
+function IconButton({
+  label,
+  color,
+  onClick,
+  children,
+}: {
+  label: string;
+  color: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="grid h-7 w-7 place-items-center rounded-md transition-opacity hover:opacity-80"
+      style={{ color, background: `color-mix(in srgb, ${color} 12%, transparent)` }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Numéros de page avec ellipses : 1 2 3 4 5 … 13. */
+function pageNumbers(page: number, count: number): (number | "…")[] {
+  if (count <= 7) return Array.from({ length: count }, (_, i) => i);
+  const set = new Set([0, count - 1, page - 1, page, page + 1]);
+  if (page < 4) [1, 2, 3, 4].forEach((i) => set.add(i));
+  if (page > count - 5) [count - 5, count - 4, count - 3, count - 2].forEach((i) => set.add(i));
+  const sorted = [...set].filter((i) => i >= 0 && i < count).sort((a, b) => a - b);
+  const result: (number | "…")[] = [];
+  sorted.forEach((n, i) => {
+    if (i > 0 && n - sorted[i - 1] > 1) result.push("…");
+    result.push(n);
+  });
+  return result;
+}
+
+function Pagination({
+  page,
+  pageCount,
+  pageSize,
+  total,
+  onPage,
+  onPageSize,
+}: {
+  page: number;
+  pageCount: number;
+  pageSize: number;
+  total: number;
+  onPage: (page: number) => void;
+  onPageSize: (size: number) => void;
+}) {
+  const navClass =
+    "grid h-8 min-w-8 place-items-center rounded-md px-1.5 text-[11px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--page)] disabled:opacity-40";
+  const first = total === 0 ? 0 : page * pageSize + 1;
+  const last = Math.min((page + 1) * pageSize, total);
+
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex items-center gap-0.5">
+        <button type="button" className={navClass} disabled={page === 0} onClick={() => onPage(0)} aria-label="Première page">
+          <ChevronsLeft size={14} aria-hidden />
+        </button>
+        <button type="button" className={navClass} disabled={page === 0} onClick={() => onPage(page - 1)} aria-label="Page précédente">
+          <ChevronLeft size={14} aria-hidden />
+        </button>
+        {pageNumbers(page, pageCount).map((n, i) =>
+          n === "…" ? (
+            <span key={`gap${i}`} className="px-1.5 text-[11px] text-[var(--text-muted)]">…</span>
+          ) : (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onPage(n)}
+              aria-current={n === page ? "page" : undefined}
+              className={cn(navClass, "tnum", n === page && "font-semibold !text-white")}
+              style={n === page ? { background: "var(--series-1)" } : undefined}
+            >
+              {n + 1}
+            </button>
+          )
+        )}
+        <button type="button" className={navClass} disabled={page >= pageCount - 1} onClick={() => onPage(page + 1)} aria-label="Page suivante">
+          <ChevronRight size={14} aria-hidden />
+        </button>
+        <button type="button" className={navClass} disabled={page >= pageCount - 1} onClick={() => onPage(pageCount - 1)} aria-label="Dernière page">
+          <ChevronsRight size={14} aria-hidden />
+        </button>
+      </div>
+
+      <span className="tnum text-[11px] text-[var(--text-secondary)]">
+        {formatInt(first)} - {formatInt(last)} sur {formatInt(total)}
+      </span>
+
+      <label className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)]">
+        Afficher
+        <select
+          value={pageSize}
+          onChange={(e) => onPageSize(Number(e.target.value))}
+          className="h-8 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-[11px] outline-none focus:border-[var(--series-1)]"
+        >
+          {PAGE_SIZES.map((size) => (
+            <option key={size} value={size}>
+              {size}
+            </option>
+          ))}
+        </select>
+        lignes
+      </label>
     </div>
   );
 }

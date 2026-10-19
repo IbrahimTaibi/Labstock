@@ -1,80 +1,110 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Save, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { saveProduct } from "@/app/(app)/products/actions";
 import type { ProductState } from "@/app/(app)/products/actions";
-import { cn } from "@/lib/utils";
+import { cn, formatTnd } from "@/lib/utils";
 import type { ProductRow } from "@/lib/types";
 
+export const PRODUCT_FORM_ID = "article-form";
+
+const VAT_RATES = [19, 13, 7, 0];
+
 const INPUT_CLASS =
-  "h-8 w-full rounded-lg border border-[var(--border)] bg-[var(--page)] px-2.5 text-[11px] text-[var(--text-primary)] outline-none focus:border-[var(--series-1)]";
+  "h-10 w-full rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 text-[12px] text-[var(--text-primary)] outline-none placeholder:text-[var(--text-muted)] focus:border-[var(--series-1)]";
+
+function todayIso() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+/** Date locale AAAA-MM-JJ d'un horodatage. */
+function toDateInput(iso: string) {
+  const date = new Date(iso);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
 function Field({
   label,
+  required,
+  hint,
+  className,
   children,
 }: {
   label: string;
+  required?: boolean;
+  hint?: string;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+    <label className={cn("flex min-w-0 flex-col gap-1", className)}>
+      <span className="text-[10px] font-semibold text-[var(--text-secondary)]">
         {label}
+        {required ? <span style={{ color: "var(--critical)" }}> *</span> : null}
       </span>
       {children}
+      {hint ? (
+        <span className="text-[9px] text-[var(--text-muted)]">{hint}</span>
+      ) : null}
     </label>
   );
 }
 
-/** Fiche produit : création et édition. Le stock, lui, vient des mouvements. */
+/**
+ * Section 1 — fiche article, en création comme en modification. Le bouton
+ * d'enregistrement vit dans le panneau « Actions rapides » et vise ce
+ * formulaire par son `id`. Le stock n'est pas saisi ici : il vient des
+ * réceptions, sorties et inventaires.
+ */
 export function ProductForm({
   product,
+  nextReference,
   categories,
   suppliers,
-  pending,
   onRun,
-  onCancel,
-  onCreateNew,
+  onValidityChange,
 }: {
   product: ProductRow | null;
+  nextReference: string;
   categories: { id: number; name: string }[];
   suppliers: { id: number; name: string }[];
-  pending: boolean;
   onRun: (action: () => Promise<ProductState>) => void;
-  onCancel: () => void;
-  /** Repasse le formulaire en création depuis le mode édition. */
-  onCreateNew: () => void;
+  /** Informe le parent pour activer ou non le bouton d'enregistrement. */
+  onValidityChange: (valid: boolean) => void;
 }) {
-  /* Les champs sont initialisés depuis le produit sélectionné. Le parent
-     remonte le composant via `key` quand la sélection change, ce qui repart
-     d'un état neuf : les brouillons ne survivent pas au changement de
-     produit, c'est voulu. */
+  /* Le parent remonte le composant via `key` à chaque changement d'article :
+     les champs repartent de la fiche sélectionnée. */
+  const [manufacturerRef, setManufacturerRef] = useState(product?.manufacturer_ref ?? "");
   const [name, setName] = useState(product?.name ?? "");
-  const [reference, setReference] = useState(product?.reference ?? "");
-  const [categoryId, setCategoryId] = useState<number | "">(
-    product?.category_id ?? ""
-  );
+  const [packaging, setPackaging] = useState(product?.packaging ?? "");
+  const [categoryId, setCategoryId] = useState<number | "">(product?.category_id ?? "");
   const [supplierId, setSupplierId] = useState<number | "">(
-    product?.supplier_id ?? ""
+    product?.supplier_id ?? (suppliers.length === 1 ? suppliers[0].id : "")
   );
   const [unitPrice, setUnitPrice] = useState(
-    product ? String(product.unit_price) : ""
+    product ? String(product.unit_price).replace(".", ",") : ""
   );
-  const [minStock, setMinStock] = useState(
-    product ? String(product.min_stock) : "5"
+  const [vatRate, setVatRate] = useState(product?.vat_rate ?? 19);
+  const [createdOn, setCreatedOn] = useState(
+    product ? toDateInput(product.created_at) : todayIso()
   );
 
-  const price = Number.parseFloat(unitPrice.replace(",", "."));
-  const minimum = Number.parseInt(minStock, 10);
+  const price = Number.parseFloat(unitPrice.replace(/\s/g, "").replace(",", "."));
+  const priceOk = Number.isFinite(price) && price >= 0;
+  const ttc = priceOk ? price * (1 + vatRate / 100) : null;
+
   const valid =
     name.trim() !== "" &&
+    packaging.trim() !== "" &&
     categoryId !== "" &&
     supplierId !== "" &&
-    Number.isFinite(price) &&
-    price >= 0 &&
-    Number.isInteger(minimum) &&
-    minimum >= 0;
+    priceOk &&
+    createdOn !== "";
+
+  useEffect(() => {
+    onValidityChange(valid);
+  }, [valid, onValidityChange]);
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -82,62 +112,79 @@ export function ProductForm({
     onRun(() =>
       saveProduct(product?.id ?? null, {
         name,
-        reference: reference.trim() || null,
+        reference: product?.reference ?? null,
+        manufacturer_ref: manufacturerRef,
+        packaging,
         category_id: categoryId as number,
         supplier_id: supplierId as number,
         unit_price: price,
-        min_stock: minimum,
+        vat_rate: vatRate,
+        created_on: createdOn,
       })
     );
   }
 
   return (
     <section className="card p-4">
-      <header className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-          {product ? "Fiche produit" : "Nouveau produit"}
-        </h2>
+      <h2 className="mb-4 text-[12px] font-bold uppercase tracking-wider text-[var(--text-primary)]">
+        1. Informations de l&apos;article
         {product ? (
-          <button
-            type="button"
-            onClick={onCreateNew}
-            className="inline-flex items-center gap-1 text-[10px] font-medium text-[var(--series-1)] hover:underline"
+          <span className="ml-2 rounded px-1.5 py-0.5 text-[9px] font-semibold normal-case tracking-normal"
+            style={{
+              color: "var(--series-1)",
+              background: "color-mix(in srgb, var(--series-1) 12%, transparent)",
+            }}
           >
-            <Plus size={12} strokeWidth={2.4} aria-hidden />
-            Nouveau produit
-          </button>
+            Modification
+          </span>
         ) : null}
-      </header>
+      </h2>
 
-      <form onSubmit={submit} className="flex flex-col gap-2.5">
-        <Field label="Désignation *">
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Ex. Tubes EDTA 5 mL"
-            className={INPUT_CLASS}
-          />
-        </Field>
-        <Field label="Référence">
-          <input
-            type="text"
-            value={reference}
-            onChange={(e) => setReference(e.target.value)}
-            placeholder="Laissée vide : générée (REF-…)"
-            className={INPUT_CLASS}
-          />
-        </Field>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="Catégorie *">
+      <form id={PRODUCT_FORM_ID} onSubmit={submit} className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1fr)]">
+          <Field
+            label={product ? "Référence article" : "Référence article (Auto)"}
+            hint={product ? undefined : "Générée automatiquement"}
+          >
+            <div className="flex h-10 items-center rounded-lg bg-[var(--page)] px-3 text-[15px] font-bold tracking-tight text-[var(--text-primary)]">
+              {product?.display_reference ?? nextReference}
+            </div>
+          </Field>
+
+          <Field label="Référence fabricant">
+            <input
+              value={manufacturerRef}
+              onChange={(e) => setManufacturerRef(e.target.value)}
+              placeholder="Ex: ROCHE-12345"
+              className={INPUT_CLASS}
+            />
+          </Field>
+
+          <Field label="Désignation de l'article" required>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ex: Réactif Glucose GOD-PAP"
+              className={cn(INPUT_CLASS, "font-semibold")}
+            />
+          </Field>
+
+          <Field label="Conditionnement" required>
+            <input
+              value={packaging}
+              onChange={(e) => setPackaging(e.target.value)}
+              placeholder="Ex: Boîte de 100"
+              className={INPUT_CLASS}
+            />
+          </Field>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+          <Field label="Catégorie" required>
             <select
               value={categoryId}
-              onChange={(e) =>
-                setCategoryId(
-                  e.target.value === "" ? "" : Number(e.target.value)
-                )
-              }
-              className={INPUT_CLASS}
+              onChange={(e) => setCategoryId(e.target.value === "" ? "" : Number(e.target.value))}
+              className={cn(INPUT_CLASS, "font-semibold uppercase")}
             >
               <option value="">— Choisir —</option>
               {categories.map((c) => (
@@ -147,14 +194,11 @@ export function ProductForm({
               ))}
             </select>
           </Field>
-          <Field label="Fournisseur *">
+
+          <Field label="Fournisseur" required>
             <select
               value={supplierId}
-              onChange={(e) =>
-                setSupplierId(
-                  e.target.value === "" ? "" : Number(e.target.value)
-                )
-              }
+              onChange={(e) => setSupplierId(e.target.value === "" ? "" : Number(e.target.value))}
               className={INPUT_CLASS}
             >
               <option value="">— Choisir —</option>
@@ -165,59 +209,51 @@ export function ProductForm({
               ))}
             </select>
           </Field>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="Prix unitaire (DT) *">
+
+          <Field label="Prix HT (TND)" required>
             <input
-              type="text"
               inputMode="decimal"
               value={unitPrice}
               onChange={(e) => setUnitPrice(e.target.value)}
-              placeholder="0,00"
-              className={cn(INPUT_CLASS, "tnum text-right")}
+              placeholder="0,000"
+              className={cn(INPUT_CLASS, "tnum font-semibold")}
             />
           </Field>
-          <Field label="Seuil minimum *">
-            <input
-              type="number"
-              min={0}
-              value={minStock}
-              onChange={(e) => setMinStock(e.target.value)}
-              className={cn(INPUT_CLASS, "tnum text-right")}
-            />
-          </Field>
-        </div>
 
-        <p className="text-[10px] leading-relaxed text-[var(--text-muted)]">
-          Le stock n&apos;est pas saisi ici : il évolue par les réceptions, les
-          sorties et les inventaires. Sous le seuil minimum, le produit passe en
-          alerte.
-        </p>
-
-        <div className="flex gap-2">
-          <button
-            type="submit"
-            disabled={pending || !valid}
-            className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-lg text-[11px] font-semibold text-white disabled:opacity-50"
-            style={{ background: "var(--series-1)" }}
-          >
-            {product ? (
-              <Save size={13} strokeWidth={2.4} aria-hidden />
-            ) : (
-              <Plus size={13} strokeWidth={2.4} aria-hidden />
-            )}
-            {product ? "Enregistrer" : "Créer le produit"}
-          </button>
-          {product ? (
-            <button
-              type="button"
-              onClick={onCancel}
-              className="flex h-8 items-center gap-1 rounded-lg border border-[var(--border)] px-2.5 text-[11px] font-medium text-[var(--text-secondary)] hover:bg-[var(--page)]"
+          <Field label="TVA (%)" required>
+            <select
+              value={vatRate}
+              onChange={(e) => setVatRate(Number(e.target.value))}
+              className={cn(INPUT_CLASS, "tnum")}
             >
-              <X size={12} strokeWidth={2.2} aria-hidden />
-              Fermer
-            </button>
-          ) : null}
+              {VAT_RATES.map((rate) => (
+                <option key={rate} value={rate}>
+                  {rate}%
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Date de création" required>
+            <input
+              type="date"
+              value={createdOn}
+              onChange={(e) => setCreatedOn(e.target.value)}
+              className={cn(INPUT_CLASS, "tnum")}
+            />
+          </Field>
+
+          <Field label="Prix TTC (TND)" hint="Calculé automatiquement">
+            <div
+              className="tnum flex h-10 items-center rounded-lg px-3 text-[17px] font-bold"
+              style={{
+                color: "var(--good)",
+                background: "color-mix(in srgb, var(--good) 8%, transparent)",
+              }}
+            >
+              {ttc === null ? "—" : formatTnd(ttc)}
+            </div>
+          </Field>
         </div>
       </form>
     </section>

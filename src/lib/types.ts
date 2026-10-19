@@ -98,6 +98,9 @@ export type ProductRow = {
   /** Référence affichée : la vraie, sinon le repli REF-000123. */
   display_reference: string;
   manufacturer_ref: string | null;
+  packaging: string | null;
+  /** Taux de TVA en %, prix TTC = unit_price × (1 + vat_rate / 100). */
+  vat_rate: number;
   category_id: number;
   category: string;
   supplier_id: number;
@@ -125,12 +128,17 @@ export type ProductsWorkspaceData = {
   lots: ProductLot[];
   categories: { id: number; name: string }[];
   suppliers: { id: number; name: string }[];
+  /** Prochaine référence automatique (ARTICLE-0078), affichée à la création. */
+  next_reference: string;
   totals: {
     count: number;
     stock_value: number;
     ok_count: number;
     low_count: number;
     out_count: number;
+    /** Articles avec du stock / sans stock (« références non utilisées »). */
+    active_count: number;
+    inactive_count: number;
   };
 };
 

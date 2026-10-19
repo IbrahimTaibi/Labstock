@@ -25,8 +25,8 @@ export default async function ProductsPage({
   return (
     <main className="mx-auto w-full max-w-[1500px] p-4 md:p-5">
       <PageHeader
-        title="Produits"
-        subtitle="Catalogue du laboratoire : références, seuils et valorisation"
+        title="Paramétrage des articles"
+        subtitle="Gestion des articles, réactifs et consommables du laboratoire"
         actions={<ExportCsvButton kind="products" />}
       />
 

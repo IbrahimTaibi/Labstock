@@ -16,6 +16,29 @@ export function formatAmount(n: number) {
   return numberFormat.format(Math.round(n));
 }
 
+const tndFormat = new Intl.NumberFormat("fr-FR", {
+  minimumFractionDigits: 3,
+  maximumFractionDigits: 3,
+});
+
+/** Prix en dinars au millime près : 45,250. */
+export function formatTnd(n: number) {
+  return tndFormat.format(n);
+}
+
+/** Préfixe des références article générées automatiquement. */
+export const ARTICLE_PREFIX = "ARTICLE-";
+
+/** Référence suivant la plus haute ARTICLE-NNNN existante. */
+export function nextArticleReference(references: (string | null)[]) {
+  const pattern = new RegExp(`^${ARTICLE_PREFIX}(\\d+)$`);
+  const max = references.reduce((highest, ref) => {
+    const match = ref ? pattern.exec(ref) : null;
+    return match ? Math.max(highest, Number(match[1])) : highest;
+  }, 0);
+  return `${ARTICLE_PREFIX}${String(max + 1).padStart(4, "0")}`;
+}
+
 export function formatCompact(n: number) {
   if (Math.abs(n) >= 1_000_000)
     return (n / 1_000_000).toFixed(1).replace(".", ",") + "M";

@@ -1,4 +1,5 @@
 import { createClient } from "./supabase/server";
+import { nextArticleReference } from "./utils";
 import type {
   ProductLot,
   ProductRow,
@@ -18,7 +19,7 @@ export async function getProductsWorkspace(): Promise<ProductsWorkspaceData> {
     supabase
       .from("products")
       .select(
-        "id, name, reference, manufacturer_ref, category_id, supplier_id, unit_price, stock_qty, min_stock, created_at, categories(name), suppliers(name)"
+        "id, name, reference, manufacturer_ref, packaging, vat_rate, category_id, supplier_id, unit_price, stock_qty, min_stock, created_at, categories(name), suppliers(name)"
       )
       .order("name"),
     supabase.from("categories").select("id, name").order("name"),
@@ -53,6 +54,8 @@ export async function getProductsWorkspace(): Promise<ProductsWorkspaceData> {
       display_reference:
         p.reference ?? `REF-${String(p.id).padStart(6, "0")}`,
       manufacturer_ref: p.manufacturer_ref,
+      packaging: p.packaging,
+      vat_rate: Number(p.vat_rate),
       category_id: p.category_id,
       category: joinName(p.categories as Join),
       supplier_id: p.supplier_id,
@@ -84,7 +87,10 @@ export async function getProductsWorkspace(): Promise<ProductsWorkspaceData> {
     lots,
     categories: categoriesRes.data ?? [],
     suppliers: suppliersRes.data ?? [],
+    next_reference: nextArticleReference(products.map((p) => p.reference)),
     totals: {
+      active_count: products.filter((p) => p.stock_qty > 0).length,
+      inactive_count: products.filter((p) => p.stock_qty <= 0).length,
       count: products.length,
       stock_value: products.reduce((sum, p) => sum + p.stock_value, 0),
       ok_count: products.filter((p) => p.state === "ok").length,

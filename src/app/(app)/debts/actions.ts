@@ -8,6 +8,8 @@ import type { DebtSource, PaymentMethod } from "@/lib/types";
 export type DebtState = {
   status: "idle" | "success" | "error";
   message: string;
+  /** Règlement créé, pour en imprimer le reçu. */
+  paymentId?: number;
 };
 
 function revalidate() {
@@ -59,7 +61,7 @@ export async function recordPayment(input: {
   const note = input.note?.trim() || null;
 
   const supabase = await createClient();
-  const { error } = await supabase.from("supplier_payments").insert({
+  const { data, error } = await supabase.from("supplier_payments").insert({
     lab_id: user.labId,
     invoice_id: input.source === "supplier" ? input.invoiceId : null,
     subcontractor_invoice_id:
@@ -70,13 +72,15 @@ export async function recordPayment(input: {
     paid_at: input.paidAt,
     note,
     created_by: user.fullName,
-  });
+  })
+    .select("id")
+    .single();
 
   if (error)
     return { status: "error", message: readableError(error.message) };
 
   revalidate();
-  return { status: "success", message: "Règlement enregistré." };
+  return { status: "success", message: "Règlement enregistré.", paymentId: data.id };
 }
 
 /**

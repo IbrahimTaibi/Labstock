@@ -550,6 +550,13 @@ export function InvoicesWorkspace({
               <Plus size={13} strokeWidth={2.4} aria-hidden />
               Saisir une facture fournisseur
             </Link>
+            <Link
+              href="/subcontracting"
+              className="mt-2 flex h-9 items-center justify-center gap-1.5 rounded-lg border border-[var(--border)] text-[11px] font-semibold text-[var(--text-primary)] hover:bg-[var(--page)]"
+            >
+              <Plus size={13} strokeWidth={2.4} aria-hidden />
+              Saisir une facture sous-traitant
+            </Link>
           </section>
 
           {data.drafts.length > 0 ? (

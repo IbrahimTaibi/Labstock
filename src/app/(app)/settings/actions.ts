@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
+import { mergeLabSettings } from "@/lib/lab-settings";
 import { createClient } from "@/lib/supabase/server";
 
 export type SettingsState = {
@@ -127,6 +128,43 @@ export async function deleteCategory(id: number): Promise<SettingsState> {
 
   revalidatePath("/settings");
   return { status: "success", message: "Catégorie supprimée." };
+}
+
+/* Un logo en data URL : 200 Ko d'image font ~270 000 caractères en base64. */
+const MAX_LOGO_CHARS = 280_000;
+
+/**
+ * Paramètres généraux du laboratoire. Réservé à l'administrateur : ces
+ * options engagent tout le laboratoire. Le document reçu est refiltré par
+ * mergeLabSettings — seules les clés connues, au bon type, sont gardées.
+ */
+export async function saveLabSettings(raw: unknown): Promise<SettingsState> {
+  const user = await getCurrentUser();
+  if (!user)
+    return { status: "error", message: "Session expirée. Reconnectez-vous." };
+  if (user.role !== "admin")
+    return { status: "error", message: "Réservé à l'administrateur." };
+  if (user.labId === null)
+    return { status: "error", message: "Aucun laboratoire actif." };
+
+  const settings = mergeLabSettings(raw);
+  if (!settings.lab.name.trim())
+    return { status: "error", message: "Le nom du laboratoire est requis." };
+  if (settings.lab.logo && settings.lab.logo.length > MAX_LOGO_CHARS)
+    return { status: "error", message: "Logo trop volumineux (200 Ko maximum)." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("lab_settings").upsert({
+    lab_id: user.labId,
+    settings,
+    updated_at: new Date().toISOString(),
+    updated_by: user.fullName,
+  });
+
+  if (error) return { status: "error", message: error.message };
+
+  revalidatePath("/settings");
+  return { status: "success", message: "Paramètres enregistrés." };
 }
 
 export async function renameLab(name: string): Promise<SettingsState> {

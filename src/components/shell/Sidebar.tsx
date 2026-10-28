@@ -19,6 +19,7 @@ import {
   FlaskConical,
   Info,
   LayoutDashboard,
+  Microscope,
   Package,
   Settings,
   ShoppingCart,
@@ -72,6 +73,7 @@ const NAV: NavEntry[] = [
     icon: FileText,
     children: [
       { label: "Factures", href: "/invoices", icon: FileText },
+      { label: "Factures sous-traitant", href: "/subcontracting", icon: Microscope },
       { label: "Dettes fournisseurs", href: "/debts", icon: Wallet },
       { label: "Règlements", href: "/debts/payments", icon: Banknote },
       { label: "Fournisseurs", href: "/suppliers", icon: Building2 },
@@ -79,7 +81,7 @@ const NAV: NavEntry[] = [
   },
   { label: "Demande d'achat", href: "/requests", icon: ShoppingCart },
   { label: "Bon de commande", href: "/orders", icon: ClipboardList },
-  { label: "Satisfaction fournisseur", icon: Star },
+  { label: "Satisfaction fournisseur", href: "/satisfaction", icon: Star },
   { label: "Stock de bord", icon: Archive },
   { label: "Factures de bord", icon: FileSpreadsheet },
   {
@@ -87,6 +89,7 @@ const NAV: NavEntry[] = [
     icon: Settings,
     children: [
       { label: "Général", href: "/settings", icon: Settings },
+      { label: "Analyses", href: "/settings/analyses", icon: ClipboardList },
       {
         label: "Laboratoires",
         href: "/labs",

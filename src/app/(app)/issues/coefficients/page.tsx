@@ -37,12 +37,17 @@ export default async function CoefficientsPage() {
           aria-hidden
         />
         <span>
-          Consultation seule. Modifier un coefficient est un acte de
-          paramétrage qui engage tous les calculs à venir : il relèvera du
-          module d&apos;administration, réservé au responsable qualité.
-          Les sorties déjà validées ne sont pas concernées — elles
-          enregistrent les quantités réellement déduites, jamais un calcul
-          rejoué.
+          Consultation seule. Modifier un coefficient engage tous les calculs
+          à venir : cela se fait dans la{" "}
+          <Link
+            href="/settings/analyses"
+            className="font-semibold text-[var(--series-1)] hover:underline"
+          >
+            configuration des analyses
+          </Link>
+          , réservée à l&apos;administrateur. Les sorties déjà validées ne sont
+          pas concernées — elles enregistrent les quantités réellement
+          déduites, jamais un calcul rejoué.
         </span>
       </p>
 

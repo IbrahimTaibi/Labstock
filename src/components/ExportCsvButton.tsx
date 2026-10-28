@@ -13,10 +13,12 @@ import { cn } from "@/lib/utils";
 export function ExportCsvButton({
   kind,
   label = "Exporter (CSV)",
+  icon = <FileDown size={14} aria-hidden />,
   className,
 }: {
   kind: ExportKind;
   label?: string;
+  icon?: React.ReactNode;
   /** Remplace l'habillage par défaut (carte). */
   className?: string;
 }) {
@@ -67,7 +69,7 @@ export function ExportCsvButton({
           aria-hidden
         />
       ) : (
-        <FileDown size={14} aria-hidden />
+        icon
       )}
       {pending ? "Export…" : error ? "Échec de l'export" : label}
     </button>

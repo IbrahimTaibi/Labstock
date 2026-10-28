@@ -8,6 +8,8 @@ import { lotConformity } from "@/lib/lot-conformity";
 import { getLots } from "@/lib/lots";
 import { getProductsWorkspace } from "@/lib/products";
 import { getRequestsWorkspace } from "@/lib/purchase-requests";
+import { getSatisfactionData } from "@/lib/satisfaction";
+import { createClient } from "@/lib/supabase/server";
 import { getSuppliersWorkspace } from "@/lib/suppliers";
 
 export type ExportKind =
@@ -17,7 +19,16 @@ export type ExportKind =
   | "lots"
   | "debts"
   | "payments"
-  | "requests";
+  | "requests"
+  | "orders"
+  | "evaluations";
+
+const ORDER_LIFECYCLE = {
+  draft: "En préparation",
+  approved: "Validé",
+  sent: "Envoyé",
+  cancelled: "Annulé",
+} as const;
 
 export type ExportResult =
   | { status: "success"; filename: string; content: string }
@@ -208,6 +219,93 @@ export async function exportCsv(kind: ExportKind): Promise<ExportResult> {
               p.reversed_at ?? "",
               p.reversed_by ?? "",
               p.reversal_reason ?? "",
+            ]),
+          ]),
+        };
+      }
+
+      case "orders": {
+        /* Tous les B.C., pas les 50 récents de l'écran. */
+        const supabase = await createClient();
+        const { data, error } = await supabase
+          .from("purchase_orders_view")
+          .select("*")
+          .order("order_date", { ascending: false })
+          .order("id", { ascending: false });
+        if (error) throw new Error(error.message);
+        return {
+          status: "success",
+          filename: csvFilename("bons-de-commande"),
+          content: toCsv([
+            [
+              "N° B.C.",
+              "Date",
+              "Fournisseur",
+              "État",
+              "Délai de livraison (j)",
+              "Mode de paiement",
+              "Devise",
+              "Articles",
+              "Quantité totale",
+              "Total HT",
+              "Total TVA",
+              "Total TTC",
+            ],
+            ...(data ?? []).map((o) => [
+              o.number,
+              o.order_date,
+              o.supplier ?? "",
+              ORDER_LIFECYCLE[o.lifecycle as keyof typeof ORDER_LIFECYCLE] ?? o.lifecycle,
+              o.delivery_days ?? "",
+              o.payment_method ?? "",
+              o.currency,
+              o.line_count,
+              o.total_quantity,
+              csvNumber(Number(o.total_ht)),
+              csvNumber(Number(o.total_vat)),
+              csvNumber(Number(o.total_ttc)),
+            ]),
+          ]),
+        };
+      }
+
+      case "evaluations": {
+        const { evaluations } = await getSatisfactionData();
+        return {
+          status: "success",
+          filename: csvFilename("evaluations-fournisseurs"),
+          content: toCsv([
+            [
+              "Date de lancement",
+              "N° B.C.",
+              "Fournisseur",
+              "Date prévue",
+              "Date réelle",
+              "Retard (j)",
+              "Conforme",
+              "Qualité",
+              "Remarque",
+              "Cause du retard",
+              "Note",
+              "Score automatique",
+              "Commentaire",
+              "Évalué par",
+            ],
+            ...evaluations.map((e) => [
+              e.order_date,
+              e.order_number,
+              e.supplier,
+              e.expected_date,
+              e.delivered_date,
+              e.delay_days,
+              e.conforming ? "Oui" : "Non",
+              e.quality,
+              e.remark,
+              e.delay_cause ?? "",
+              e.rating,
+              e.auto_score,
+              e.comment ?? "",
+              e.evaluated_by ?? "",
             ]),
           ]),
         };

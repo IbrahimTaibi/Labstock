@@ -8,7 +8,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { DEBT_STATUS_CONFIG } from "./DebtBadge";
-import { formatAmount, formatCompact, formatInt, formatPercent } from "@/lib/utils";
+import { formatCompact, formatInt, formatPercent, formatTnd } from "@/lib/utils";
 import type {
   DebtAgeingSlice,
   DebtCreditorTotal,
@@ -25,29 +25,33 @@ export function DebtKpis({ totals }: { totals: DebtTotals }) {
       <Kpi
         label="Total dettes"
         value={formatInt(totals.count)}
-        note="Factures suivies"
+        note="Nombre total"
         color="var(--series-1)"
         icon={<FileText size={17} strokeWidth={2.2} aria-hidden />}
       />
       <Kpi
         label="Montant total à payer"
-        value={formatAmount(totals.amount_due)}
-        note="Toutes catégories"
+        value={formatTnd(totals.amount_due)}
+        unit="TND"
+        note="Toutes catégories confondues"
         color="var(--good)"
         icon={<Banknote size={17} strokeWidth={2.2} aria-hidden />}
       />
       <Kpi
         label="Montant total payé"
-        value={formatAmount(totals.amount_paid)}
-        note="Règlements valides"
+        value={formatTnd(totals.amount_paid)}
+        unit="TND"
+        note="Toutes catégories confondues"
         color="var(--series-5)"
         icon={<Wallet size={17} strokeWidth={2.2} aria-hidden />}
       />
       <Kpi
         label="Solde total restant dû"
-        value={formatAmount(totals.balance)}
+        value={formatTnd(totals.balance)}
+        unit="TND"
         note="Montant en attente"
         color="var(--critical)"
+        tinted
         icon={<CircleAlert size={17} strokeWidth={2.2} aria-hidden />}
       />
       <Kpi
@@ -55,6 +59,7 @@ export function DebtKpis({ totals }: { totals: DebtTotals }) {
         value={formatInt(totals.overdue_count)}
         note={`Dont ${formatInt(totals.overdue_over_30)} avec retard > 30 jours`}
         color="var(--series-2)"
+        tinted
         icon={<TriangleAlert size={17} strokeWidth={2.2} aria-hidden />}
       />
     </div>
@@ -64,18 +69,41 @@ export function DebtKpis({ totals }: { totals: DebtTotals }) {
 function Kpi({
   label,
   value,
+  unit,
   note,
   color,
+  tinted,
   icon,
 }: {
   label: string;
   value: string;
+  unit?: string;
   note: string;
   color: string;
+  /** Libellé et valeur dans la couleur de la carte : les cartes d'alerte. */
+  tinted?: boolean;
   icon: React.ReactNode;
 }) {
   return (
-    <article className="card flex items-center gap-3 p-3.5">
+    <article className="card flex items-center justify-between gap-3 p-3.5">
+      <div className="min-w-0">
+        <div
+          className="truncate text-[10px] font-semibold"
+          style={{ color: tinted ? color : "var(--text-secondary)" }}
+        >
+          {label}
+        </div>
+        <div
+          className="tnum truncate text-[20px] font-bold leading-tight"
+          style={{ color: tinted ? color : "var(--text-primary)" }}
+        >
+          {value}
+          {unit ? <span className="ml-1 text-[11px] font-semibold">{unit}</span> : null}
+        </div>
+        <div className="truncate text-[9px] text-[var(--text-muted)]" title={note}>
+          {note}
+        </div>
+      </div>
       <span
         className="grid h-9 w-9 shrink-0 place-items-center rounded-lg"
         style={{
@@ -85,17 +113,6 @@ function Kpi({
       >
         {icon}
       </span>
-      <div className="min-w-0">
-        <div className="truncate text-[10px] font-medium text-[var(--text-secondary)]">
-          {label}
-        </div>
-        <div className="truncate text-[20px] font-semibold leading-tight text-[var(--text-primary)]">
-          {value}
-        </div>
-        <div className="truncate text-[9px] text-[var(--text-muted)]" title={note}>
-          {note}
-        </div>
-      </div>
     </article>
   );
 }
@@ -111,7 +128,7 @@ export function DebtAgeing({
   totals: DebtTotals;
 }) {
   const total = ageing.reduce((sum, slice) => sum + slice.count, 0);
-  const RADIUS = 52;
+  const RADIUS = 44;
   const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
   /* Décalage de chaque arc = somme des précédents. Calculé par somme de
@@ -135,7 +152,7 @@ export function DebtAgeing({
 
   return (
     <section className="card p-4">
-      <h2 className="mb-3 text-[12px] font-semibold text-[var(--text-primary)]">
+      <h2 className="mb-3 text-[11px] font-bold uppercase tracking-wide text-[var(--text-primary)]">
         Répartition des dettes par ancienneté
       </h2>
 
@@ -145,9 +162,10 @@ export function DebtAgeing({
         </p>
       ) : (
         <>
-          <div className="relative mx-auto mb-3 h-[132px] w-[132px]">
+          <div className="flex items-center gap-3">
+          <div className="relative h-[108px] w-[108px] shrink-0">
             <svg
-              viewBox="0 0 132 132"
+              viewBox="0 0 108 108"
               className="h-full w-full -rotate-90"
               role="img"
               aria-label={`${formatInt(total)} dettes réparties par ancienneté`}
@@ -155,11 +173,11 @@ export function DebtAgeing({
               {arcs.map((arc) => (
                 <circle
                   key={arc.status}
-                  cx="66"
-                  cy="66"
+                  cx="54"
+                  cy="54"
                   r={RADIUS}
                   fill="none"
-                  strokeWidth="14"
+                  strokeWidth="16"
                   stroke={DEBT_STATUS_CONFIG[arc.status].color}
                   strokeDasharray={`${arc.dash} ${CIRCUMFERENCE - arc.dash}`}
                   strokeDashoffset={-arc.offset}
@@ -178,13 +196,13 @@ export function DebtAgeing({
             </div>
           </div>
 
-          <ul className="space-y-1">
+          <ul className="min-w-0 flex-1 space-y-1.5">
             {arcs.map((arc) => {
               const config = DEBT_STATUS_CONFIG[arc.status];
               return (
                 <li
                   key={arc.status}
-                  className="flex items-center gap-2 text-[10px]"
+                  className="flex items-center gap-1.5 text-[10px]"
                 >
                   <span
                     className="h-2 w-2 shrink-0 rounded-full"
@@ -194,16 +212,17 @@ export function DebtAgeing({
                   <span className="min-w-0 flex-1 truncate text-[var(--text-secondary)]">
                     {config.short}
                   </span>
-                  <span className="tnum shrink-0 font-medium text-[var(--text-primary)]">
-                    {formatInt(arc.count)}
-                  </span>
-                  <span className="tnum w-12 shrink-0 text-right text-[var(--text-muted)]">
-                    {formatPercent(arc.fraction * 100)}
+                  <span className="tnum shrink-0 text-[var(--text-primary)]">
+                    <span className="font-semibold">{formatInt(arc.count)}</span>{" "}
+                    <span className="text-[var(--text-muted)]">
+                      ({formatPercent(arc.fraction * 100)})
+                    </span>
                   </span>
                 </li>
               );
             })}
           </ul>
+          </div>
 
           {totals.overdue_count > 0 ? (
             <p

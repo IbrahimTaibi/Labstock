@@ -11,8 +11,43 @@ import type {
   DebtStatus,
   DebtTotals,
   DebtsWorkspaceData,
+  PaymentReceipt,
   PaymentRow,
 } from "./types";
+
+/** Un règlement et l'état actuel de sa facture, pour le reçu imprimable. */
+export async function getPaymentReceipt(
+  paymentId: number
+): Promise<PaymentReceipt | null> {
+  const supabase = await createClient();
+
+  const { data: payment, error } = await supabase
+    .from("supplier_payment_history_view")
+    .select("*")
+    .eq("payment_id", paymentId)
+    .maybeSingle();
+  if (error) throw new Error(`Chargement du règlement : ${error.message}`);
+  if (!payment) return null;
+
+  const { data: debt, error: debtError } = await supabase
+    .from("supplier_debts_view")
+    .select("*")
+    .eq("source", payment.source)
+    .eq("invoice_id", payment.invoice_id)
+    .single();
+  if (debtError) throw new Error(`Chargement de la facture : ${debtError.message}`);
+
+  return {
+    payment: { ...payment, amount: Number(payment.amount) },
+    debt: {
+      ...debt,
+      amount_due: Number(debt.amount_due),
+      amount_paid: Number(debt.amount_paid),
+      balance: Number(debt.balance),
+      days_late: debt.days_late === null ? null : Number(debt.days_late),
+    },
+  };
+}
 
 /**
  * Dettes du laboratoire, leurs règlements et les agrégats des deux écrans du

@@ -13,6 +13,39 @@ import type {
   RequestsWorkspaceData,
 } from "./types";
 
+/** Une demande et son historique, pour la D.A. imprimable. */
+export async function getPurchaseRequestDocument(id: number): Promise<{
+  request: PurchaseRequestRow;
+  events: PurchaseRequestEvent[];
+} | null> {
+  const supabase = await createClient();
+
+  const [requestRes, eventsRes] = await Promise.all([
+    supabase.from("purchase_requests_view").select("*").eq("id", id).maybeSingle(),
+    supabase
+      .from("purchase_request_events")
+      .select("id, request_id, kind, occurred_at, actor, detail")
+      .eq("request_id", id)
+      .order("occurred_at", { ascending: true }),
+  ]);
+
+  if (requestRes.error)
+    throw new Error(`Chargement de la demande : ${requestRes.error.message}`);
+  if (eventsRes.error)
+    throw new Error(`Chargement de l'historique : ${eventsRes.error.message}`);
+  if (!requestRes.data) return null;
+
+  const row = requestRes.data;
+  return {
+    request: {
+      ...row,
+      estimated_unit_price:
+        row.estimated_unit_price === null ? null : Number(row.estimated_unit_price),
+    },
+    events: (eventsRes.data ?? []) as PurchaseRequestEvent[],
+  };
+}
+
 /**
  * Demandes d'achat du laboratoire, leur historique et les agrégats de
  * l'écran. Les six cartes (§3), les deux camemberts (§5) et le Top 5 (§5.3)

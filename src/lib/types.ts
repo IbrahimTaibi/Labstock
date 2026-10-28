@@ -336,6 +336,52 @@ export type InvoiceDraftRow = {
   lines: number;
 };
 
+/* --------------------------------------------------- Factures sous-traitant */
+
+export type SubcontractorLineKind = "prestation" | "frais";
+
+export type SubcontractorInvoiceLine = {
+  kind: SubcontractorLineKind;
+  designation: string;
+  quantity: number;
+  unit_price: number;
+  discount_pct: number;
+  vat_rate: number;
+};
+
+export type SubcontractorInvoice = {
+  id: number;
+  number: string;
+  subcontractor_number: string | null;
+  subcontractor_id: number;
+  issue_date: string;
+  entry_date: string;
+  description: string;
+  default_vat_rate: number;
+  stamp_duty: number;
+  /** Montant déjà réglé : une facture réglée ne se supprime pas. */
+  amount_paid: number;
+  lines: SubcontractorInvoiceLine[];
+};
+
+/** Ligne de la recherche « Rechercher facture ». */
+export type SubcontractorInvoiceRow = {
+  id: number;
+  number: string;
+  subcontractor: string;
+  description: string;
+  issue_date: string;
+  total_ttc: number;
+};
+
+export type SubcontractorInvoiceData = {
+  subcontractors: { id: number; name: string }[];
+  invoices: SubcontractorInvoiceRow[];
+  invoice: SubcontractorInvoice | null;
+  /** Numéro que recevra une nouvelle facture datée d'aujourd'hui. */
+  next_number: string;
+};
+
 /* ------------------------------------------------------------------ Dettes */
 
 /** Tranches d'ancienneté : miroir exact de public.debt_ageing_bucket(). */
@@ -384,6 +430,13 @@ export type PaymentRow = {
   reversed_at: string | null;
   reversed_by: string | null;
   reversal_reason: string | null;
+  created_by: string | null;
+};
+
+/** Reçu d'un règlement : le paiement et l'état de sa facture aujourd'hui. */
+export type PaymentReceipt = {
+  payment: PaymentRow;
+  debt: DebtRow;
 };
 
 /** Les 5 cartes KPI, partagées par les deux écrans du parcours. */
@@ -487,6 +540,116 @@ export type OrdersWorkspaceData = {
     supplier_id: number;
     unit_price: number;
   }[];
+};
+
+/* ------------------------------------------- Configuration des analyses */
+
+export type AnalysisItemRole = "consumable" | "reagent" | "culture" | "antibiotic";
+
+export type AnalysisItem = {
+  product_id: number;
+  product_name: string;
+  reference: string | null;
+  packaging: string | null;
+  role: AnalysisItemRole;
+  /** Quantité par test. */
+  coefficient: number;
+  consumption_unit: string | null;
+  /** Faux : « selon règle », sortie manuelle quand `condition` est remplie. */
+  auto_destock: boolean;
+  condition: string | null;
+  germ_type: string | null;
+  incubation: string | null;
+};
+
+export type InstrumentStatus = "in_service" | "maintenance" | "out_of_service";
+
+export type Instrument = {
+  id: number;
+  name: string;
+  category: string | null;
+  status: InstrumentStatus;
+  lis_interface: boolean;
+  calibration: string | null;
+  maintenance: string | null;
+};
+
+export type AnalysisConfig = {
+  id: number;
+  code: string;
+  name: string;
+  category: string | null;
+  description: string | null;
+  turnaround_hours: number | null;
+  sample_type: string | null;
+  tube: string | null;
+  sample_volume_ml: number | null;
+  transport_conditions: string | null;
+  urgent_allowed: boolean;
+  bio_validation_required: boolean;
+  microscopy_control: boolean;
+  active: boolean;
+  instrument_id: number | null;
+  notes: string | null;
+  updated_at: string | null;
+  updated_by: string | null;
+  items: AnalysisItem[];
+};
+
+export type AnalysisConfigData = {
+  analyses: {
+    id: number;
+    code: string;
+    name: string;
+    category: string | null;
+    active: boolean;
+    item_count: number;
+  }[];
+  current: AnalysisConfig | null;
+  products: { id: number; name: string; reference: string | null; packaging: string | null }[];
+  instruments: Instrument[];
+};
+
+/* ------------------------------------------- Satisfaction des fournisseurs */
+
+export type DeliveryEvaluation = {
+  id: number;
+  order_id: number;
+  order_number: string;
+  supplier_id: number;
+  supplier: string;
+  order_date: string;
+  expected_date: string;
+  delivered_date: string;
+  delay_days: number;
+  conforming: boolean;
+  quality: string;
+  remark: string;
+  delay_cause: string | null;
+  rating: number;
+  auto_score: number;
+  comment: string | null;
+  evaluated_by: string | null;
+};
+
+/** B.C. passé au fournisseur, évalué ou à évaluer. */
+export type EvaluableOrder = {
+  id: number;
+  number: string;
+  supplier_id: number;
+  supplier: string;
+  order_date: string;
+  /** Date de commande + délai de livraison ; nulle sans délai saisi. */
+  expected_date: string | null;
+  /** Dernière réception non annulée ; nulle tant que rien n'est reçu. */
+  delivered_date: string | null;
+  evaluation_id: number | null;
+};
+
+export type SatisfactionData = {
+  orders: EvaluableOrder[];
+  evaluations: DeliveryEvaluation[];
+  operator: string;
 };
 
 /* ------------------------------------------------- Demandes d'achat (D.A.) */

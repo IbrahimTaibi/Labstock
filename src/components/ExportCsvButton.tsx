@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { FileDown, Loader2, TriangleAlert } from "lucide-react";
 import { exportCsv, type ExportKind } from "@/app/(app)/exports/actions";
+import { cn } from "@/lib/utils";
 
 /**
  * Déclenche la construction du CSV côté serveur puis le télécharge. Le
@@ -12,9 +13,12 @@ import { exportCsv, type ExportKind } from "@/app/(app)/exports/actions";
 export function ExportCsvButton({
   kind,
   label = "Exporter (CSV)",
+  className,
 }: {
   kind: ExportKind;
   label?: string;
+  /** Remplace l'habillage par défaut (carte). */
+  className?: string;
 }) {
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +52,11 @@ export function ExportCsvButton({
       onClick={download}
       disabled={pending}
       title={error ?? "Exporter toutes les données de cette page"}
-      className="card flex items-center gap-2 px-3 py-2.5 text-[11px] font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--page)] disabled:opacity-60"
+      className={cn(
+        className ??
+          "card flex items-center gap-2 px-3 py-2.5 text-[11px] font-medium text-[var(--text-primary)] transition-colors hover:bg-[var(--page)]",
+        "disabled:opacity-60"
+      )}
     >
       {pending ? (
         <Loader2 size={14} className="animate-spin" aria-hidden />

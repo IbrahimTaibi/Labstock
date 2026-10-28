@@ -5,10 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   Boxes,
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
-  ChevronsLeft,
-  ChevronsRight,
   Coins,
   FlaskConical,
   Pencil,
@@ -27,6 +23,8 @@ import type { ProductState } from "@/app/(app)/products/actions";
 import { Donut } from "@/components/charts/Donut";
 import { seriesColor } from "@/components/charts/chart-tokens";
 import { Td, Th } from "@/components/DataTable";
+import { Kpi } from "@/components/Kpi";
+import { Pagination } from "@/components/Pagination";
 import { cn, formatDate, formatInt, formatTnd } from "@/lib/utils";
 import type { ProductRow, ProductsWorkspaceData, ProductStockState } from "@/lib/types";
 import { ProductForm, PRODUCT_FORM_ID } from "./ProductForm";
@@ -41,7 +39,6 @@ const STATE_LABELS: Record<Exclude<StateFilter, "all">, string> = {
   alert: "Sous le seuil ou en rupture",
 };
 
-const PAGE_SIZES = [10, 25, 50, 100];
 /* Le donut garde 5 parts lisibles ; le reste est regroupé. */
 const MAX_SLICES = 5;
 
@@ -475,48 +472,6 @@ export function ProductsWorkspace({
   );
 }
 
-function Kpi({
-  icon,
-  color,
-  label,
-  value,
-  unit,
-  note,
-  emphasis = false,
-}: {
-  icon: React.ReactNode;
-  color: string;
-  label: string;
-  value: string;
-  unit?: string;
-  note: string;
-  emphasis?: boolean;
-}) {
-  return (
-    <div className="card flex items-center gap-3 p-4">
-      <span
-        className="grid h-11 w-11 shrink-0 place-items-center rounded-xl"
-        style={{ color, background: `color-mix(in srgb, ${color} 12%, transparent)` }}
-      >
-        {icon}
-      </span>
-      <span className="min-w-0">
-        <span className="block text-[10px] font-semibold" style={{ color: emphasis ? color : "var(--text-secondary)" }}>
-          {label}
-        </span>
-        <span
-          className="tnum block truncate text-[22px] font-bold leading-tight"
-          style={{ color: emphasis ? color : "var(--text-primary)" }}
-        >
-          {value}
-          {unit ? <span className="ml-1 text-[11px] font-semibold">{unit}</span> : null}
-        </span>
-        <span className="block text-[10px] text-[var(--text-muted)]">{note}</span>
-      </span>
-    </div>
-  );
-}
-
 /** En-tête de colonne sur fond plein, comme la maquette. */
 function Head({
   children,
@@ -554,96 +509,5 @@ function IconButton({
     >
       {children}
     </button>
-  );
-}
-
-/** Numéros de page avec ellipses : 1 2 3 4 5 … 13. */
-function pageNumbers(page: number, count: number): (number | "…")[] {
-  if (count <= 7) return Array.from({ length: count }, (_, i) => i);
-  const set = new Set([0, count - 1, page - 1, page, page + 1]);
-  if (page < 4) [1, 2, 3, 4].forEach((i) => set.add(i));
-  if (page > count - 5) [count - 5, count - 4, count - 3, count - 2].forEach((i) => set.add(i));
-  const sorted = [...set].filter((i) => i >= 0 && i < count).sort((a, b) => a - b);
-  const result: (number | "…")[] = [];
-  sorted.forEach((n, i) => {
-    if (i > 0 && n - sorted[i - 1] > 1) result.push("…");
-    result.push(n);
-  });
-  return result;
-}
-
-function Pagination({
-  page,
-  pageCount,
-  pageSize,
-  total,
-  onPage,
-  onPageSize,
-}: {
-  page: number;
-  pageCount: number;
-  pageSize: number;
-  total: number;
-  onPage: (page: number) => void;
-  onPageSize: (size: number) => void;
-}) {
-  const navClass =
-    "grid h-8 min-w-8 place-items-center rounded-md px-1.5 text-[11px] text-[var(--text-secondary)] transition-colors hover:bg-[var(--page)] disabled:opacity-40";
-  const first = total === 0 ? 0 : page * pageSize + 1;
-  const last = Math.min((page + 1) * pageSize, total);
-
-  return (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-      <div className="flex items-center gap-0.5">
-        <button type="button" className={navClass} disabled={page === 0} onClick={() => onPage(0)} aria-label="Première page">
-          <ChevronsLeft size={14} aria-hidden />
-        </button>
-        <button type="button" className={navClass} disabled={page === 0} onClick={() => onPage(page - 1)} aria-label="Page précédente">
-          <ChevronLeft size={14} aria-hidden />
-        </button>
-        {pageNumbers(page, pageCount).map((n, i) =>
-          n === "…" ? (
-            <span key={`gap${i}`} className="px-1.5 text-[11px] text-[var(--text-muted)]">…</span>
-          ) : (
-            <button
-              key={n}
-              type="button"
-              onClick={() => onPage(n)}
-              aria-current={n === page ? "page" : undefined}
-              className={cn(navClass, "tnum", n === page && "font-semibold !text-white")}
-              style={n === page ? { background: "var(--series-1)" } : undefined}
-            >
-              {n + 1}
-            </button>
-          )
-        )}
-        <button type="button" className={navClass} disabled={page >= pageCount - 1} onClick={() => onPage(page + 1)} aria-label="Page suivante">
-          <ChevronRight size={14} aria-hidden />
-        </button>
-        <button type="button" className={navClass} disabled={page >= pageCount - 1} onClick={() => onPage(pageCount - 1)} aria-label="Dernière page">
-          <ChevronsRight size={14} aria-hidden />
-        </button>
-      </div>
-
-      <span className="tnum text-[11px] text-[var(--text-secondary)]">
-        {formatInt(first)} - {formatInt(last)} sur {formatInt(total)}
-      </span>
-
-      <label className="flex items-center gap-2 text-[11px] text-[var(--text-secondary)]">
-        Afficher
-        <select
-          value={pageSize}
-          onChange={(e) => onPageSize(Number(e.target.value))}
-          className="h-8 rounded-md border border-[var(--border)] bg-[var(--surface)] px-2 text-[11px] outline-none focus:border-[var(--series-1)]"
-        >
-          {PAGE_SIZES.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-        </select>
-        lignes
-      </label>
-    </div>
   );
 }

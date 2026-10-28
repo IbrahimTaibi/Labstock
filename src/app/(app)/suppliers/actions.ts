@@ -11,12 +11,21 @@ export type SupplierState = {
 
 export type SupplierProfileInput = {
   name: string;
-  contact_name: string | null;
   email: string | null;
   phone: string | null;
+  mobile: string | null;
   address: string | null;
-  notes: string | null;
+  postal_code: string | null;
+  tax_id: string | null;
+  category: string | null;
+  payment_terms_days: number | null;
+  currency: string;
+  active: boolean;
+  /** AAAA-MM-JJ. */
+  created_on: string;
 };
+
+const CURRENCIES = ["TND", "EUR", "USD"];
 
 function revalidate() {
   revalidatePath("/suppliers");
@@ -27,7 +36,7 @@ function revalidate() {
 export async function saveSupplier(
   id: number | null,
   profile: SupplierProfileInput
-): Promise<SupplierState> {
+): Promise<SupplierState & { id?: number }> {
   const user = await getCurrentUser();
   if (!user)
     return { status: "error", message: "Session expirée. Reconnectez-vous." };
@@ -35,25 +44,44 @@ export async function saveSupplier(
   const name = profile.name.trim();
   if (!name)
     return { status: "error", message: "Le nom du fournisseur est requis." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(profile.created_on))
+    return { status: "error", message: "Date de création invalide." };
+  if (!CURRENCIES.includes(profile.currency))
+    return { status: "error", message: "Devise non prise en charge." };
+  if (
+    profile.payment_terms_days !== null &&
+    (!Number.isInteger(profile.payment_terms_days) || profile.payment_terms_days < 0)
+  )
+    return { status: "error", message: "Conditions de paiement invalides." };
 
   const clean = (value: string | null) => {
     const trimmed = value?.trim() ?? "";
     return trimmed === "" ? null : trimmed;
   };
+  const email = clean(profile.email);
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+    return { status: "error", message: "Adresse e-mail invalide." };
 
   const fields = {
     name,
-    contact_name: clean(profile.contact_name),
-    email: clean(profile.email),
+    email,
     phone: clean(profile.phone),
+    mobile: clean(profile.mobile),
     address: clean(profile.address),
-    notes: clean(profile.notes),
+    postal_code: clean(profile.postal_code),
+    tax_id: clean(profile.tax_id),
+    category: clean(profile.category),
+    payment_terms_days: profile.payment_terms_days,
+    currency: profile.currency,
+    active: profile.active,
+    created_on: profile.created_on,
   };
 
   const supabase = await createClient();
-  const { error } = id
-    ? await supabase.from("suppliers").update(fields).eq("id", id)
-    : await supabase.from("suppliers").insert(fields);
+  /* Le code FOURN-NNNN est attribué par la base à la création. */
+  const { data, error } = id
+    ? await supabase.from("suppliers").update(fields).eq("id", id).select("id, code").single()
+    : await supabase.from("suppliers").insert(fields).select("id, code").single();
 
   if (error) {
     if (error.code === "23505")
@@ -64,13 +92,59 @@ export async function saveSupplier(
     return { status: "error", message: error.message };
   }
 
-  revalidatePath("/suppliers");
+  revalidate();
   return {
     status: "success",
+    id: data.id,
     message: id
-      ? `Fiche « ${name} » mise à jour.`
-      : `Fournisseur « ${name} » créé.`,
+      ? `Fiche ${data.code} « ${name} » mise à jour.`
+      : `Fournisseur ${data.code} « ${name} » créé.`,
   };
+}
+
+export type EvaluationInput = {
+  supplier_id: number;
+  /** AAAA-MM, mois évalué. */
+  month: string;
+  quality: number;
+  delays: number;
+  documents: number;
+  service: number;
+  pricing: number;
+  comment: string | null;
+};
+
+/** Enregistre (ou remplace) l'évaluation d'un fournisseur pour un mois. */
+export async function saveEvaluation(input: EvaluationInput): Promise<SupplierState> {
+  const user = await getCurrentUser();
+  if (!user)
+    return { status: "error", message: "Session expirée. Reconnectez-vous." };
+
+  if (!/^\d{4}-\d{2}$/.test(input.month))
+    return { status: "error", message: "Mois d'évaluation invalide." };
+  const criteria = [input.quality, input.delays, input.documents, input.service, input.pricing];
+  if (criteria.some((n) => !Number.isFinite(n) || n < 1 || n > 5))
+    return { status: "error", message: "Chaque critère se note de 1 à 5." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("supplier_evaluations").upsert(
+    {
+      supplier_id: input.supplier_id,
+      period: `${input.month}-01`,
+      quality: input.quality,
+      delays: input.delays,
+      documents: input.documents,
+      service: input.service,
+      pricing: input.pricing,
+      comment: input.comment?.trim() || null,
+      evaluated_by: user.fullName,
+    },
+    { onConflict: "supplier_id,period" }
+  );
+  if (error) return { status: "error", message: error.message };
+
+  revalidatePath("/suppliers");
+  return { status: "success", message: "Évaluation enregistrée." };
 }
 
 export async function deleteSupplier(id: number): Promise<SupplierState> {

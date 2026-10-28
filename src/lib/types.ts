@@ -21,11 +21,21 @@ export type LabsWorkspaceData = {
 
 export type SupplierProfile = {
   id: number;
+  /** FOURN-NNNN, attribué par la base. */
+  code: string;
   name: string;
   contact_name: string | null;
   email: string | null;
   phone: string | null;
+  mobile: string | null;
   address: string | null;
+  postal_code: string | null;
+  tax_id: string | null;
+  category: string | null;
+  payment_terms_days: number | null;
+  currency: string;
+  active: boolean;
+  created_on: string;
   notes: string | null;
 };
 
@@ -46,8 +56,35 @@ export type SupplierOrder = {
   number: string;
   ordered_at: string;
   status: DeliveryStatus;
+  lifecycle: "draft" | "approved" | "sent" | "cancelled";
+  /** Date de livraison attendue (commande + délai), si le délai est connu. */
+  expected_date: string | null;
   lines: number;
   total: number;
+};
+
+export type SupplierReceipt = {
+  id: number;
+  supplier_id: number;
+  order_id: number;
+  received_at: string;
+  expected_date: string | null;
+  reversed: boolean;
+};
+
+export type SupplierEvaluation = {
+  id: number;
+  supplier_id: number;
+  /** Premier jour du mois évalué. */
+  period: string;
+  quality: number;
+  delays: number;
+  documents: number;
+  service: number;
+  pricing: number;
+  /** Moyenne des cinq critères. */
+  score: number;
+  comment: string | null;
 };
 
 export type SupplierInvoice = {
@@ -73,6 +110,8 @@ export type SupplierRow = SupplierProfile & {
   last_invoice_date: string | null;
   /** Part du total facturé du laboratoire (0–1). */
   share: number;
+  /** Note de la dernière évaluation, null si jamais évalué. */
+  rating: number | null;
 };
 
 export type SuppliersWorkspaceData = {
@@ -81,11 +120,19 @@ export type SuppliersWorkspaceData = {
   orders: SupplierOrder[];
   /** Factures récentes par fournisseur (20 max) ; les totaux couvrent tout. */
   invoices: SupplierInvoice[];
+  receipts: SupplierReceipt[];
+  evaluations: SupplierEvaluation[];
   totals: {
     invoiced: number;
     pending: number;
     overdue: number;
     overdue_count: number;
+    /** Achats HT du mois en cours (factures validées). */
+    purchases_month: number;
+    /** Commandes validées ou envoyées, pas encore entièrement reçues. */
+    open_orders: number;
+    /** Moyenne des dernières notes des fournisseurs évalués. */
+    average_rating: number | null;
   };
 };
 
@@ -194,6 +241,7 @@ export type InvoiceDocument = {
 
 export type InvoicesWorkspaceData = {
   invoices: InvoiceRow[];
+  drafts: InvoiceDraftRow[];
   suppliers: { id: number; name: string }[];
   /** Catalogue pour composer les lignes d'une nouvelle facture. */
   products: { id: number; name: string; supplier_id: number; unit_price: number }[];
@@ -226,6 +274,67 @@ export type CategoryStock = {
 };
 
 export type InvoiceStatus = "paid" | "pending" | "overdue";
+
+/* ------------------------------------------------- Saisie facture fournisseur */
+
+export type InvoiceEntryProduct = {
+  id: number;
+  reference: string | null;
+  manufacturer_ref: string | null;
+  name: string;
+  supplier_id: number | null;
+  category_id: number | null;
+  unit_price: number;
+  vat_rate: number;
+};
+
+export type InvoiceEntryLine = {
+  product_id: number | null;
+  manufacturer_ref: string | null;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  discount_pct: number;
+  vat_rate: number;
+  match_status: "matched" | "new_product" | "manual";
+};
+
+/** Brouillon repris dans l'écran de saisie. */
+export type InvoiceEntryDraft = {
+  id: number;
+  number: string;
+  supplier_id: number;
+  supplier_number: string | null;
+  issue_date: string;
+  order_id: number | null;
+  payment_terms_days: number | null;
+  stamp_duty: number;
+  ocr_confidence: number | null;
+  document_name: string | null;
+  document_size: number | null;
+  /** URL signée (1 h) du document stocké, pour l'aperçu. */
+  document_url: string | null;
+  document_type: string | null;
+  lines: InvoiceEntryLine[];
+};
+
+export type InvoiceEntryData = {
+  suppliers: { id: number; name: string }[];
+  products: InvoiceEntryProduct[];
+  orders: { id: number; number: string; supplier_id: number; ordered_at: string }[];
+  draft: InvoiceEntryDraft | null;
+  /** Prochaine référence article, pour créer un article depuis une ligne. */
+  next_reference: string;
+};
+
+export type InvoiceDraftRow = {
+  id: number;
+  number: string;
+  supplier: string;
+  supplier_number: string | null;
+  issue_date: string;
+  lines: number;
+};
 
 /* ------------------------------------------------------------------ Dettes */
 

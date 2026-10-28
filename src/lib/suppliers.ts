@@ -1,5 +1,6 @@
 import { createClient } from "./supabase/server";
 import type {
+  SupplierEvaluation,
   SupplierInvoice,
   SupplierOrder,
   SupplierProduct,
@@ -37,6 +38,7 @@ export async function getSuppliersWorkspace(): Promise<SuppliersWorkspaceData> {
       .select(
         "id, supplier_id, number, amount, status, issue_date, due_date, payment_date"
       )
+      .neq("status", "draft")
       .order("issue_date", { ascending: false })
       .range(offset, offset + PAGE - 1);
     if (page.error)
@@ -45,12 +47,14 @@ export async function getSuppliersWorkspace(): Promise<SuppliersWorkspaceData> {
     if ((page.data?.length ?? 0) < PAGE) break;
   }
 
-  const [suppliersRes, productsRes, ordersRes, orderLinesRes] =
+  const [suppliersRes, productsRes, ordersRes, orderLinesRes, receiptsRes, evaluationsRes] =
     await Promise.all([
       supabase
         .from("suppliers")
-        .select("id, name, contact_name, email, phone, address, notes")
-        .order("name"),
+        .select(
+          "id, code, name, contact_name, email, phone, mobile, address, postal_code, tax_id, category, payment_terms_days, currency, active, created_on, notes"
+        )
+        .order("code"),
       supabase
         .from("products")
         .select(
@@ -59,14 +63,29 @@ export async function getSuppliersWorkspace(): Promise<SuppliersWorkspaceData> {
         .order("name"),
       supabase
         .from("purchase_orders")
-        .select("id, supplier_id, number, ordered_at, status")
+        .select("id, supplier_id, number, ordered_at, order_date, delivery_days, status, lifecycle")
         .order("ordered_at", { ascending: false }),
       supabase
         .from("purchase_order_lines")
         .select("order_id, quantity_ordered, unit_price"),
+      supabase
+        .from("goods_receipts")
+        .select("id, order_id, received_at, reversed_at")
+        .order("received_at", { ascending: false }),
+      supabase
+        .from("supplier_evaluations")
+        .select("id, supplier_id, period, quality, delays, documents, service, pricing, comment")
+        .order("period", { ascending: false }),
     ]);
 
-  for (const res of [suppliersRes, productsRes, ordersRes, orderLinesRes]) {
+  for (const res of [
+    suppliersRes,
+    productsRes,
+    ordersRes,
+    orderLinesRes,
+    receiptsRes,
+    evaluationsRes,
+  ]) {
     if (res.error)
       throw new Error(`Chargement des fournisseurs : ${res.error.message}`);
   }
@@ -94,15 +113,64 @@ export async function getSuppliersWorkspace(): Promise<SuppliersWorkspaceData> {
     orderTotals.set(line.order_id, entry);
   }
 
+  const addDays = (iso: string, days: number) => {
+    const date = new Date(`${iso}T12:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  };
+
   const orders: SupplierOrder[] = (ordersRes.data ?? []).map((o) => ({
     id: o.id,
     supplier_id: o.supplier_id,
     number: o.number,
     ordered_at: o.ordered_at,
     status: o.status,
+    lifecycle: o.lifecycle,
+    expected_date:
+      o.delivery_days === null
+        ? null
+        : addDays(o.order_date ?? o.ordered_at, o.delivery_days),
     lines: orderTotals.get(o.id)?.lines ?? 0,
     total: orderTotals.get(o.id)?.total ?? 0,
   }));
+  const orderById = new Map(orders.map((o) => [o.id, o]));
+
+  const receipts = (receiptsRes.data ?? []).flatMap((r) => {
+    const order = orderById.get(r.order_id);
+    if (!order) return [];
+    return [
+      {
+        id: r.id,
+        supplier_id: order.supplier_id,
+        order_id: r.order_id,
+        received_at: r.received_at,
+        expected_date: order.expected_date,
+        reversed: r.reversed_at !== null,
+      },
+    ];
+  });
+
+  const evaluations: SupplierEvaluation[] = (evaluationsRes.data ?? []).map((e) => {
+    const criteria = [e.quality, e.delays, e.documents, e.service, e.pricing].map(Number);
+    return {
+      id: e.id,
+      supplier_id: e.supplier_id,
+      period: e.period,
+      quality: criteria[0],
+      delays: criteria[1],
+      documents: criteria[2],
+      service: criteria[3],
+      pricing: criteria[4],
+      score: criteria.reduce((sum, n) => sum + n, 0) / criteria.length,
+      comment: e.comment,
+    };
+  });
+  /* Évaluations triées du plus récent au plus ancien : la première vue est
+     la dernière note. */
+  const latestRating = new Map<number, number>();
+  for (const e of evaluations) {
+    if (!latestRating.has(e.supplier_id)) latestRating.set(e.supplier_id, e.score);
+  }
 
   type Acc = {
     products: number;
@@ -143,9 +211,15 @@ export async function getSuppliersWorkspace(): Promise<SuppliersWorkspaceData> {
     entry.stock_value += p.stock_qty * p.unit_price;
   }
 
+  /* En cours : validée ou envoyée au fournisseur, pas entièrement reçue. */
+  const isOpen = (o: SupplierOrder) =>
+    o.status !== "received" && (o.lifecycle === "approved" || o.lifecycle === "sent");
   for (const o of orders) {
-    if (o.status !== "received") of(o.supplier_id).open_orders += 1;
+    if (isOpen(o)) of(o.supplier_id).open_orders += 1;
   }
+
+  const monthStart = new Date().toISOString().slice(0, 8) + "01";
+  let purchasesMonth = 0;
 
   const recentInvoices: SupplierInvoice[] = [];
   const recentCount = new Map<number, number>();
@@ -155,6 +229,7 @@ export async function getSuppliersWorkspace(): Promise<SuppliersWorkspaceData> {
     const amount = Number(f.amount);
     entry.invoice_count += 1;
     entry.invoiced_total += amount;
+    if (f.issue_date >= monthStart) purchasesMonth += amount;
     if (f.status === "pending") entry.pending_amount += amount;
     if (f.status === "overdue") {
       entry.overdue_count += 1;
@@ -182,15 +257,24 @@ export async function getSuppliersWorkspace(): Promise<SuppliersWorkspaceData> {
       ...s,
       ...entry,
       share: grandTotal > 0 ? entry.invoiced_total / grandTotal : 0,
+      rating: latestRating.get(s.id) ?? null,
     };
   });
+
+  const ratings = suppliers.flatMap((s) => (s.rating === null ? [] : [s.rating]));
 
   return {
     suppliers,
     products,
     orders,
     invoices: recentInvoices,
+    receipts,
+    evaluations,
     totals: {
+      purchases_month: purchasesMonth,
+      open_orders: orders.filter(isOpen).length,
+      average_rating:
+        ratings.length > 0 ? ratings.reduce((sum, n) => sum + n, 0) / ratings.length : null,
       invoiced: grandTotal,
       pending: suppliers.reduce((sum, s) => sum + s.pending_amount, 0),
       overdue: suppliers.reduce((sum, s) => sum + s.overdue_amount, 0),

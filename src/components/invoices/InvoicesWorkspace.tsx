@@ -20,7 +20,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  createInvoice,
   deleteInvoice,
   loadInvoiceLines,
   markInvoicePaid,
@@ -41,25 +40,6 @@ const INPUT_CLASS =
 
 type Feedback = { message: string; ok: boolean } | null;
 export type StatusFilter = "all" | InvoiceStatus;
-
-/** "" = ligne libre (frais de port, prestation…). */
-type DraftLine = {
-  product_id: number | "";
-  description: string;
-  quantity: string;
-  unit_price: string;
-};
-
-const emptyLine = (): DraftLine => ({
-  product_id: "",
-  description: "",
-  quantity: "1",
-  unit_price: "",
-});
-
-function parseAmount(raw: string) {
-  return Number.parseFloat(raw.replace(",", "."));
-}
 
 /* Stat + filtre en un seul geste : cliquer un statut filtre le tableau. */
 function StatFilter({
@@ -134,14 +114,6 @@ export function InvoicesWorkspace({
   );
   const [linesLoading, setLinesLoading] = useState(false);
 
-  /* Composeur de facture. */
-  const [draft, setDraft] = useState({
-    supplier_id: "" as number | "",
-    issue_date: new Date().toISOString().slice(0, 10),
-    due_date: "",
-  });
-  const [draftLines, setDraftLines] = useState<DraftLine[]>([emptyLine()]);
-
   /* Sélection dérivée : si la facture disparaît (suppression), le panneau
      se vide de lui-même. */
   const selected = data.invoices.find((f) => f.id === selectedId) ?? null;
@@ -195,64 +167,6 @@ export function InvoicesWorkspace({
     safePage * PAGE_SIZE,
     safePage * PAGE_SIZE + PAGE_SIZE
   );
-
-  const supplierProducts =
-    draft.supplier_id === ""
-      ? []
-      : data.products.filter((p) => p.supplier_id === draft.supplier_id);
-
-  const draftTotal = draftLines.reduce((sum, line) => {
-    const qty = Number.parseInt(line.quantity, 10);
-    const price = parseAmount(line.unit_price);
-    if (!Number.isInteger(qty) || qty <= 0) return sum;
-    if (!Number.isFinite(price) || price < 0) return sum;
-    return sum + qty * price;
-  }, 0);
-
-  const draftLinesValid =
-    draftLines.length > 0 &&
-    draftLines.every((line) => {
-      const qty = Number.parseInt(line.quantity, 10);
-      const price = parseAmount(line.unit_price);
-      if (!Number.isInteger(qty) || qty <= 0) return false;
-      if (!Number.isFinite(price) || price < 0) return false;
-      if (line.product_id === "" && line.description.trim() === "") return false;
-      return true;
-    });
-
-  function updateLine(index: number, patch: Partial<DraftLine>) {
-    setDraftLines((lines) =>
-      lines.map((line, i) => (i === index ? { ...line, ...patch } : line))
-    );
-  }
-
-  function resetForm() {
-    setDraft({
-      supplier_id: "",
-      issue_date: new Date().toISOString().slice(0, 10),
-      due_date: "",
-    });
-    setDraftLines([emptyLine()]);
-  }
-
-  function submitCreate(event: React.FormEvent) {
-    event.preventDefault();
-    if (draft.supplier_id === "") return;
-    run(() =>
-      createInvoice(draft.supplier_id as number, {
-        issue_date: draft.issue_date,
-        due_date: draft.due_date,
-        lines: draftLines.map((line) => ({
-          product_id: line.product_id === "" ? null : line.product_id,
-          description:
-            line.description.trim() === "" ? null : line.description.trim(),
-          quantity: Number.parseInt(line.quantity, 10),
-          unit_price: parseAmount(line.unit_price),
-        })),
-      })
-    );
-    resetForm();
-  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -619,216 +533,59 @@ export function InvoicesWorkspace({
             </section>
           ) : null}
 
-          {/* Composeur */}
+          {/* Saisie : écran dédié (import, lecture automatique, vérification). */}
           <section className="card p-4">
-            <h2 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+            <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
               Nouvelle facture
             </h2>
-
-            <form onSubmit={submitCreate} className="flex flex-col gap-2.5">
-              <label className="flex flex-col gap-1">
-                <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                  Fournisseur *
-                </span>
-                <select
-                  value={draft.supplier_id}
-                  onChange={(e) => {
-                    setDraft((d) => ({
-                      ...d,
-                      supplier_id:
-                        e.target.value === "" ? "" : Number(e.target.value),
-                    }));
-                    setDraftLines([emptyLine()]);
-                  }}
-                  className={INPUT_CLASS}
-                >
-                  <option value="">— Choisir —</option>
-                  {data.suppliers.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <div className="grid grid-cols-2 gap-2">
-                <label className="flex flex-col gap-1">
-                  <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                    Émise le *
-                  </span>
-                  <input
-                    type="date"
-                    value={draft.issue_date}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, issue_date: e.target.value }))
-                    }
-                    className={INPUT_CLASS}
-                  />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                    Échéance *
-                  </span>
-                  <input
-                    type="date"
-                    value={draft.due_date}
-                    onChange={(e) =>
-                      setDraft((d) => ({ ...d, due_date: e.target.value }))
-                    }
-                    className={INPUT_CLASS}
-                  />
-                </label>
-              </div>
-
-              {draft.supplier_id === "" ? (
-                <p className="text-[10px] text-[var(--text-muted)]">
-                  Le numéro (FAC-{new Date().getFullYear()}-…) est attribué
-                  automatiquement. Choisissez le fournisseur pour composer les
-                  lignes.
-                </p>
-              ) : (
-                <>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                      Lignes
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setDraftLines((lines) => [...lines, emptyLine()])
-                      }
-                      className="inline-flex items-center gap-1 text-[10px] font-medium text-[var(--series-1)] hover:underline"
-                    >
-                      <Plus size={12} strokeWidth={2.4} aria-hidden />
-                      Ajouter
-                    </button>
-                  </div>
-
-                  {draftLines.map((line, index) => (
-                    <div
-                      key={index}
-                      className="flex flex-col gap-1.5 rounded-lg border border-[var(--border)] bg-[var(--page)] p-2"
-                    >
-                      <select
-                        value={line.product_id}
-                        onChange={(e) => {
-                          const id =
-                            e.target.value === ""
-                              ? ""
-                              : Number(e.target.value);
-                          const product = supplierProducts.find(
-                            (p) => p.id === id
-                          );
-                          updateLine(index, {
-                            product_id: id,
-                            unit_price: product
-                              ? String(product.unit_price)
-                              : line.unit_price,
-                            description: product ? "" : line.description,
-                          });
-                        }}
-                        className={cn(INPUT_CLASS, "bg-[var(--surface)]")}
-                      >
-                        <option value="">— Ligne libre —</option>
-                        {supplierProducts.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                      {line.product_id === "" ? (
-                        <input
-                          type="text"
-                          value={line.description}
-                          onChange={(e) =>
-                            updateLine(index, { description: e.target.value })
-                          }
-                          placeholder="Description (frais de port…)"
-                          className={cn(INPUT_CLASS, "bg-[var(--surface)]")}
-                        />
-                      ) : null}
-                      <div className="flex items-center gap-1.5">
-                        <input
-                          type="number"
-                          min={1}
-                          value={line.quantity}
-                          onChange={(e) =>
-                            updateLine(index, { quantity: e.target.value })
-                          }
-                          className={cn(
-                            INPUT_CLASS,
-                            "tnum w-14 bg-[var(--surface)] text-right"
-                          )}
-                          aria-label="Quantité"
-                        />
-                        <span className="text-[10px] text-[var(--text-muted)]">
-                          ×
-                        </span>
-                        <input
-                          type="text"
-                          inputMode="decimal"
-                          value={line.unit_price}
-                          onChange={(e) =>
-                            updateLine(index, { unit_price: e.target.value })
-                          }
-                          placeholder="P.U."
-                          className={cn(
-                            INPUT_CLASS,
-                            "tnum min-w-0 flex-1 bg-[var(--surface)] text-right"
-                          )}
-                          aria-label="Prix unitaire"
-                        />
-                        <span className="tnum w-16 shrink-0 text-right text-[10px] font-medium text-[var(--text-secondary)]">
-                          {(() => {
-                            const qty = Number.parseInt(line.quantity, 10);
-                            const price = parseAmount(line.unit_price);
-                            return Number.isInteger(qty) &&
-                              qty > 0 &&
-                              Number.isFinite(price) &&
-                              price >= 0
-                              ? formatAmount(qty * price)
-                              : "—";
-                          })()}
-                        </span>
-                        <button
-                          type="button"
-                          disabled={draftLines.length === 1}
-                          onClick={() =>
-                            setDraftLines((lines) =>
-                              lines.filter((_, i) => i !== index)
-                            )
-                          }
-                          className="shrink-0 rounded p-1 text-[var(--text-muted)] hover:text-[var(--critical)] disabled:opacity-30"
-                        >
-                          <Trash2 size={13} strokeWidth={2.2} aria-hidden />
-                          <span className="sr-only">Retirer la ligne</span>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-
-                  <div className="flex items-center justify-between border-t border-[var(--border)] pt-2">
-                    <span className="text-[11px] font-semibold text-[var(--text-primary)]">
-                      Total :{" "}
-                      <span className="tnum">{formatAmount(draftTotal)}</span>
-                    </span>
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={
-                      pending || draft.due_date === "" || !draftLinesValid
-                    }
-                    className="flex h-8 items-center justify-center gap-1.5 rounded-lg text-[11px] font-semibold text-white disabled:opacity-50"
-                    style={{ background: "var(--series-1)" }}
-                  >
-                    <Plus size={13} strokeWidth={2.4} aria-hidden />
-                    Enregistrer la facture
-                  </button>
-                </>
-              )}
-            </form>
+            <p className="mb-3 text-[10px] text-[var(--text-muted)]">
+              Importez le PDF ou la photo de la facture : les lignes sont lues
+              et rapprochées du référentiel automatiquement.
+            </p>
+            <Link
+              href="/invoices/new"
+              className="flex h-9 items-center justify-center gap-1.5 rounded-lg text-[11px] font-semibold text-white"
+              style={{ background: "var(--serious)" }}
+            >
+              <Plus size={13} strokeWidth={2.4} aria-hidden />
+              Saisir une facture fournisseur
+            </Link>
           </section>
+
+          {data.drafts.length > 0 ? (
+            <section className="card p-4">
+              <h2 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+                Brouillons
+                <span className="ml-1.5 font-normal normal-case tracking-normal text-[var(--text-muted)]">
+                  ({formatInt(data.drafts.length)})
+                </span>
+              </h2>
+              <ul className="flex flex-col divide-y divide-[var(--border)]">
+                {data.drafts.map((d) => (
+                  <li key={d.id}>
+                    <Link
+                      href={`/invoices/new?brouillon=${d.id}`}
+                      className="flex items-center gap-2 rounded px-1 py-2 text-[11px] hover:bg-[var(--page)]"
+                    >
+                      <FileText size={13} strokeWidth={2.2} className="shrink-0 text-[var(--text-muted)]" aria-hidden />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-[var(--text-primary)]">
+                          {d.supplier}
+                          {d.supplier_number ? ` · ${d.supplier_number}` : ""}
+                        </span>
+                        <span className="tnum block text-[10px] text-[var(--text-muted)]">
+                          {d.number} · {formatDate(d.issue_date)} · {formatInt(d.lines)} ligne(s)
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[10px] font-semibold text-[var(--series-1)]">
+                        Reprendre
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
         </div>
       </div>
     </div>

@@ -1,9 +1,117 @@
 import { createClient } from "./supabase/server";
+import { nextArticleReference } from "./utils";
 import type {
   InvoiceDocument,
+  InvoiceEntryData,
+  InvoiceEntryDraft,
   InvoiceRow,
   InvoicesWorkspaceData,
 } from "./types";
+
+export const INVOICE_BUCKET = "supplier-invoices";
+
+/**
+ * Référentiel de l'écran de saisie (fournisseurs, articles, commandes) et,
+ * le cas échéant, le brouillon à reprendre.
+ */
+export async function getInvoiceEntryData(
+  draftId: number | null
+): Promise<InvoiceEntryData> {
+  const supabase = await createClient();
+
+  const [suppliersRes, productsRes, ordersRes] = await Promise.all([
+    supabase.from("suppliers").select("id, name").order("name"),
+    supabase
+      .from("products")
+      .select(
+        "id, reference, manufacturer_ref, name, supplier_id, category_id, unit_price, vat_rate"
+      )
+      .order("reference"),
+    supabase
+      .from("purchase_orders")
+      .select("id, number, supplier_id, ordered_at")
+      .order("ordered_at", { ascending: false }),
+  ]);
+
+  if (suppliersRes.error)
+    throw new Error(`Chargement des fournisseurs : ${suppliersRes.error.message}`);
+  if (productsRes.error)
+    throw new Error(`Chargement des articles : ${productsRes.error.message}`);
+  if (ordersRes.error)
+    throw new Error(`Chargement des commandes : ${ordersRes.error.message}`);
+
+  const products = (productsRes.data ?? []).map((p) => ({
+    ...p,
+    unit_price: Number(p.unit_price),
+    vat_rate: Number(p.vat_rate ?? 0),
+  }));
+
+  let draft: InvoiceEntryDraft | null = null;
+  if (draftId !== null) {
+    const { data, error } = await supabase
+      .from("invoices")
+      .select(
+        "id, number, supplier_id, supplier_number, issue_date, order_id, payment_terms_days, stamp_duty, ocr_confidence, document_path, document_name, document_size, invoice_lines(product_id, manufacturer_ref, description, quantity, unit_price, discount_pct, vat_rate, match_status, id)"
+      )
+      .eq("id", draftId)
+      .eq("status", "draft")
+      .maybeSingle();
+    if (error) throw new Error(`Chargement du brouillon : ${error.message}`);
+
+    if (data) {
+      let documentUrl: string | null = null;
+      if (data.document_path) {
+        const signed = await supabase.storage
+          .from(INVOICE_BUCKET)
+          .createSignedUrl(data.document_path, 3600);
+        documentUrl = signed.data?.signedUrl ?? null;
+      }
+      type LineJoin = InvoiceEntryDraft["lines"][number] & { id: number };
+      const lines = ((data.invoice_lines ?? []) as LineJoin[])
+        .slice()
+        .sort((a, b) => a.id - b.id);
+
+      draft = {
+        id: data.id,
+        number: data.number,
+        supplier_id: data.supplier_id,
+        supplier_number: data.supplier_number,
+        issue_date: data.issue_date,
+        order_id: data.order_id,
+        payment_terms_days: data.payment_terms_days,
+        stamp_duty: Number(data.stamp_duty),
+        ocr_confidence:
+          data.ocr_confidence === null ? null : Number(data.ocr_confidence),
+        document_name: data.document_name,
+        document_size: data.document_size,
+        document_url: documentUrl,
+        document_type: data.document_name?.toLowerCase().endsWith(".pdf")
+          ? "application/pdf"
+          : data.document_name
+            ? "image/*"
+            : null,
+        lines: lines.map((l) => ({
+          product_id: l.product_id,
+          manufacturer_ref: l.manufacturer_ref,
+          description: l.description,
+          quantity: l.quantity,
+          unit_price: Number(l.unit_price),
+          discount_pct: Number(l.discount_pct),
+          vat_rate: Number(l.vat_rate),
+          match_status: l.match_status,
+        })),
+      };
+    }
+  }
+
+  return {
+    suppliers: suppliersRes.data ?? [],
+    products,
+    orders: ordersRes.data ?? [],
+    draft,
+    next_reference: nextArticleReference(products.map((p) => p.reference)),
+  };
+}
 
 /**
  * Facture unique avec son fournisseur et ses lignes, pour l'impression.
@@ -84,6 +192,8 @@ export async function getInvoicesWorkspace(): Promise<InvoicesWorkspaceData> {
       .select(
         "id, number, supplier_id, amount, status, issue_date, due_date, payment_date, suppliers(name)"
       )
+      /* Les brouillons ne sont pas encore des factures : liste à part. */
+      .neq("status", "draft")
       .order("issue_date", { ascending: false })
       .order("id", { ascending: false })
       .range(from, from + PAGE - 1);
@@ -97,13 +207,20 @@ export async function getInvoicesWorkspace(): Promise<InvoicesWorkspaceData> {
     if ((page.data?.length ?? 0) < PAGE) break;
   }
 
-  const [suppliersRes, productsRes] = await Promise.all([
+  const [suppliersRes, productsRes, draftsRes] = await Promise.all([
     supabase.from("suppliers").select("id, name").order("name"),
     supabase
       .from("products")
       .select("id, name, supplier_id, unit_price")
       .order("name"),
+    supabase
+      .from("invoices")
+      .select("id, number, supplier_number, issue_date, suppliers(name), invoice_lines(count)")
+      .eq("status", "draft")
+      .order("id", { ascending: false }),
   ]);
+  if (draftsRes.error)
+    throw new Error(`Chargement des brouillons : ${draftsRes.error.message}`);
 
   if (suppliersRes.error)
     throw new Error(
@@ -163,6 +280,17 @@ export async function getInvoicesWorkspace(): Promise<InvoicesWorkspaceData> {
 
   return {
     invoices,
+    drafts: (draftsRes.data ?? []).map((d) => {
+      const count = d.invoice_lines as { count: number }[] | null;
+      return {
+        id: d.id,
+        number: d.number,
+        supplier: supplierName(d.suppliers as SupplierJoin),
+        supplier_number: d.supplier_number,
+        issue_date: d.issue_date,
+        lines: count?.[0]?.count ?? 0,
+      };
+    }),
     suppliers: suppliersRes.data ?? [],
     products: (productsRes.data ?? []).map((p) => ({
       ...p,
